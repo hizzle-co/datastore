@@ -27,25 +27,25 @@ class Collection {
 	protected $namespace;
 
 	/**
-	 * The collection's name, e.g customers.
+	 * The collection's name, e.g subscribers.
 	 *
 	 * @var string
 	 */
 	protected $name;
 
 	/**
-	 * The collection's singular name, e.g customer.
+	 * The collection's singular name, e.g subscriber.
 	 *
 	 * @var string
 	 */
 	protected $singular_name;
 
 	/**
-	 * CRUD class eg: Hpay_Customer
+	 * CRUD class. Should extend Record.
 	 *
 	 * @var string
 	 */
-	public $object;
+	public $object = null;
 
 	/**
 	 * In case this collection is connected to the posts table.
@@ -137,10 +137,16 @@ class Collection {
 	 * Retrieves a collection by its name.
 	 *
 	 * @param string $name Name of the collection.
-	 * @return Collection|null
+	 * @return Collection
+	 * @throws Store_Exception
 	 */
 	public static function instance( $name ) {
-		return isset( self::$instances[ $name ] ) ? self::$instances[ $name ] : null;
+
+		if ( ! isset( self::$instances[ $name ] ) ) {
+			throw new Store_Exception( 'missing_collection', wp_sprintf( 'Collection %s not found.', $name ) );
+		}
+
+		return self::$instances[ $name ];
 	}
 
 	/**
@@ -498,6 +504,39 @@ class Collection {
 	}
 
 	/**
+	 * Retrieves an ID by a given prop.
+	 *
+	 * @param string $prop The prop to search by.
+	 * @param int|string|float $value The value to search for.
+	 * @return int|false The ID if found, false otherwise.
+	 */
+	public function get_id_by_prop( $prop, $value ) {
+		global $wpdb;
+
+		// Try the cache.
+		$prop  = sanitize_key( $prop );
+		$value = trim( $value );
+		$id    = wp_cache_get( $value, $this->hook_prefix( 'ids_by_' . $prop ) );
+
+		// Maybe retrieve from the db.
+		if ( false === $id ) {
+
+			$table = $this->get_db_table_name();
+			$row   = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE $prop = %s LIMIT 1", $value ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+			if ( ! empty( $row ) ) {
+				$id = $row['id'];
+				$this->update_cache( $row );
+			} else {
+				$id = 0;
+				wp_cache_set( $value, $id, $this->hook_prefix( 'ids_by_' . $prop ) );
+			}
+		}
+
+		return (int) $id;
+	}
+
+	/**
 	 * Prepares data for insertion.
 	 *
 	 * @param array $data The data to insert/update.
@@ -825,13 +864,20 @@ class Collection {
 	}
 
 	/**
-	 * Retrieves the cache fields.
+	 * Retrieves the cache keys.
 	 *
 	 */
-	public function get_cache_fields() {
+	public function get_cache_keys() {
 
-		// Only cache unique fields.
-		return wp_list_pluck( wp_list_filter( $this->props, array( 'unique' => true ) ), 'name' );
+		$keys = array();
+
+		// Cache by unique keys.
+		if ( isset( $this->keys['unique'] ) ) {
+			$keys = array_merge( $keys, $this->keys['unique'] );
+		}
+
+		// Filter and return.
+		return apply_filters( $this->hook_prefix( 'cache_fields', true ), $keys );
 	}
 
 	/**
@@ -841,8 +887,8 @@ class Collection {
 	 */
 	public function update_cache( $record ) {
 
-		foreach ( $this->get_cache_fields() as $key ) {
-			wp_cache_set( $record[ $key ], $record['id'], $this->hook_prefix( 'id_by_' . $key ) );
+		foreach ( $this->get_cache_keys() as $key ) {
+			wp_cache_set( $record[ $key ], $record['id'], $this->hook_prefix( 'ids_by_' . $key ) );
 		}
 
 		// Cache the entire record.
@@ -856,8 +902,8 @@ class Collection {
 	 */
 	public function clear_cache( $record ) {
 
-		foreach ( $this->get_cache_fields() as $key ) {
-			wp_cache_delete( $record->$key, $this->hook_prefix( 'id_by_' . $key, true ) );
+		foreach ( $this->get_cache_keys() as $key ) {
+			wp_cache_delete( $record->$key, $this->hook_prefix( 'ids_by_' . $key, true ) );
 		}
 
 		wp_cache_delete( $record->id, $this->get_full_name() );

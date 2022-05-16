@@ -20,7 +20,7 @@ defined( 'ABSPATH' ) || exit;
 class Prop {
 
 	/**
-	 * The collection name, e.g hpay_customers.
+	 * The collection name, e.g subscribers.
 	 *
 	 * @var string
 	 */
@@ -74,13 +74,6 @@ class Prop {
 	 * @var string
 	 */
 	public $extra = null;
-
-	/**
-	 * Whether or not the property is unique.
-	 *
-	 * @var bool
-	 */
-	public $unique = false;
 
 	/**
 	 * An array of allowed property values. Pass a string to use as a callback.

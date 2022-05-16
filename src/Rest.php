@@ -129,7 +129,7 @@ class REST extends \WP_REST_Controller {
 	 * Retrieves an object.
 	 *
 	 * @param  int $id Object ID.
-	 * @return \Hpay_Data|null Data object or null.
+	 * @return Record|null Data object or null.
 	 */
 	protected function get_object( $id ) {
 		$collection = $this->fetch_collection();
@@ -154,7 +154,7 @@ class REST extends \WP_REST_Controller {
 	 * @since  1.0.0
 	 * @param  \WP_REST_Request $request  Full details about the request.
 	 * @param  bool            $creating If is creating a new object.
-	 * @return \Hpay_Data|WP_Error
+	 * @return Record|WP_Error
 	 */
 	protected function save_object( $request, $creating = false ) {
 
@@ -436,14 +436,14 @@ class REST extends \WP_REST_Controller {
 	/**
 	 * Prepare links for the request.
 	 *
-	 * @param \Hpay_Data      $object   Object data.
+	 * @param Record           $record  Record data.
 	 * @param \WP_REST_Request $request Request object.
 	 * @return array                    Links for the given post.
 	 */
-	protected function prepare_links( $object, $request ) {
+	protected function prepare_links( $record, $request ) {
 		$links = array(
 			'self'       => array(
-				'href' => rest_url( sprintf( '/%s/%s/%d', $this->namespace, $this->rest_base, $object->get_id() ) ),
+				'href' => rest_url( sprintf( '/%s/%s/%d', $this->namespace, $this->rest_base, $record->get_id() ) ),
 			),
 			'collection' => array(
 				'href' => rest_url( sprintf( '/%s/%s', $this->namespace, $this->rest_base ) ),

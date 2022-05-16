@@ -178,16 +178,6 @@ class Record {
 	}
 
 	/**
-	 * Retrieves the database object.
-	 *
-	 * @since 1.0.0
-	 * @return Hpay_DB_Table
-	 */
-	public function db() {
-		return hpay()->tables->get_table( $this->collection_name );
-	}
-
-	/**
 	 * Reads the object from the DB (or cache).
 	 *
 	 * @since 1.0.0

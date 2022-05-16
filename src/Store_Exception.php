@@ -33,8 +33,8 @@ class Store_Exception extends \Exception {
 	/**
 	 * Setup exception.
 	 *
-	 * @param string $code             Machine-readable error code, e.g `hpay_uknown_gateway`.
-	 * @param string $message          User-friendly translated error message, e.g. 'The selected payment gateway is not supported'.
+	 * @param string $code             Machine-readable error code, e.g `subscriber_not_found`.
+	 * @param string $message          User-friendly translated error message, e.g. 'The subscriber was not found'.
 	 * @param int    $http_status_code Proper HTTP status code to respond with, e.g. 400.
 	 * @param array  $data             Additional error data.
 	 */

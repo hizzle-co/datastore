@@ -69,10 +69,16 @@ class Store {
 	 * Retrieves a store by its namespace.
 	 *
 	 * @param string $namespace Namespace of the store.
-	 * @return Store|null
+	 * @return Store
+	 * @throws Store_Exception
 	 */
 	public static function instance( $namespace ) {
-		return isset( self::$instances[ $namespace ] ) ? self::$instances[ $namespace ] : null;
+
+		if ( ! isset( self::$instances[ $namespace ] ) ) {
+			throw new Store_Exception( 'missing_store', wp_sprintf( 'Store %s not found.', $namespace ) );
+		}
+
+		return self::$instances[ $namespace ];
 	}
 
 	/**
