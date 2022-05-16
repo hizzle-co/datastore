@@ -68,22 +68,22 @@ class Record {
 	protected $collection_name = '';
 
 	/**
-	 * This is the name of this object type. Used for hooks, etc.
+	 * This is the name of this object type, including the prefix. Used for hooks, etc.
 	 *
 	 * @since 1.0.0
 	 * @var string
 	 */
-	protected $object_type = 'data';
+	protected $object_type;
 
 	/**
 	 * Default constructor.
 	 *
 	 * This class is not meant to be init directly.
 	 * @see Collection::get()
-	 * @param int|Record|array $object ID to load from the DB (optional) or already queried data.
+	 * @param int|Record|array $record ID to load from the DB (optional) or already queried data.
 	 * @throws Store_Exception Throws exception if ID is set & invalid.
 	 */
-	public function __construct( $object = 0, $args = array() ) {
+	public function __construct( $record = 0, $args = array() ) {
 
 		// Init class properties.
 		foreach ( $args as $key => $value ) {
@@ -95,19 +95,24 @@ class Record {
 		// Set the default data.
 		$this->default_data = $this->data;
 
-		// If we have an ID, load the data from the DB.
-		if ( ! empty( $object ) && is_callable( array( $object, 'get_id' ) ) ) {
-			$object = call_user_func( array( $object, 'get_id' ) );
+		// If this is a record instance, retrieve the ID.
+		if ( ! empty( $record ) && is_callable( array( $record, 'get_id' ) ) ) {
+			$record = call_user_func( array( $record, 'get_id' ) );
+		}
+
+		// If this is a post object, fetch the ID.
+		if ( $record instanceof \WP_Post ) {
+			$this->set_id( absint( $record->ID ) );
 		}
 
 		// If we have an array of data, check id.
-		if ( is_array( $object ) && ! empty( $object['id'] ) ) {
-			$object = $object['id'];
+		if ( is_array( $record ) && ! empty( $record['id'] ) ) {
+			$record = $record['id'];
 		}
 
-		// Read the object from the DB.
-		if ( ! empty( $object ) && is_numeric( $object ) ) {
-			$this->set_id( $object );
+		// Read the record from the DB.
+		if ( ! empty( $record ) && is_numeric( $record ) ) {
+			$this->set_id( absint( $record ) );
 			Collection::instance( $this->collection_name )->read( $this );
 		}
 
@@ -178,29 +183,6 @@ class Record {
 	}
 
 	/**
-	 * Reads the object from the DB (or cache).
-	 *
-	 * @since 1.0.0
-	 * @throws Store_Exception exception if object not found.
-	 */
-	protected function read() {
-		$result = $this->db->read( $this );
-
-		if ( empty( $result ) ) {
-			throw new Store_Exception( $this->object_type . '_not_found', $this->not_found_error() );
-		}
-	}
-
-	/**
-	 * Returns an error when a record is not found.
-	 *
-	 * @return string
-	 */
-	protected function not_found_error() {
-		return __( 'Record not found.', 'hizzle-store' );
-	}
-
-	/**
 	 * Set object read property.
 	 *
 	 * @since 3.0.0
@@ -247,7 +229,7 @@ class Record {
 			return $this->get_id();
 		}
 
-		do_action( 'hpay_before_' . $this->object_type . '_object_save', $this, $this->db );
+		do_action( $this->object_type . '_before_object_save', $this, $this->db );
 
 		try {
 
@@ -260,7 +242,7 @@ class Record {
 			return new \WP_Error( $e->getErrorCode(), $e->getMessage(), $e->getErrorData() );
 		}
 
-		do_action( 'hpay_after_' . $this->object_type . '_object_save', $this, $this->db );
+		do_action( $this->object_type . '_object_save', $this, $this->db );
 
 		return $this->get_id();
 	}
@@ -373,7 +355,7 @@ class Record {
 	 * @return string
 	 */
 	protected function get_hook_prefix() {
-		return 'hpay_' . $this->object_type . '_get_';
+		return $this->object_type . '_get_';
 	}
 
 	/**

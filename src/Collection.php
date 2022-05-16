@@ -499,7 +499,28 @@ class Collection {
 	 */
 	public function get( $item_id ) {
 		$class = $this->object;
-		$args  = array();
+		$args  = array(
+			'data'            => array(),
+			'collection_name' => $this->get_full_name(),
+			'object_type'     => $this->get_full_name( true ),
+		);
+
+		foreach ( $this->props as $key => $prop ) {
+
+			// Skip id.
+			if ( 'id' === $key ) {
+				continue;
+			}
+
+			// The default will be null if not explicitly set.
+			$args['data'][ $key ] = $prop->default;
+
+			// If the prop is not nullable, ensure that the default is not nullable.
+			if ( ! $prop->nullable && is_null( $args['data'][ $key ] ) ) {
+				$args['data'][ $key ] = '';
+			}
+		}
+
 		return new $class( $item_id, $args );
 	}
 

@@ -120,7 +120,7 @@ class Prop {
 	/**
 	 * Class constructor.
 	 *
-	 * @param string $collection The collection's name, e.g hpay_customers.
+	 * @param string $collection The collection's name, including the prefix.
 	 * @param array $args
 	 */
 	public function __construct( $collection, $args = array() ) {
