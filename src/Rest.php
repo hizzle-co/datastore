@@ -15,39 +15,42 @@ defined( 'ABSPATH' ) || exit;
  */
 class REST extends \WP_REST_Controller {
 
-    /**
+	/**
 	 * Loads the class.
 	 *
 	 * @param string $namespace The store's namespace.
-     * @param string $collection The current collection.
+	 * @param string $collection The current collection.
 	 */
 	public function __construct( $namespace, $collection ) {
 		$this->namespace = $namespace . '/v1';
-        $this->rest_base = $collection;
+		$this->rest_base = $collection;
+
+		// Register rest routes.
+		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 	}
 
-    /**
+	/**
 	 * Retrieves the current store.
 	 *
-     * @return Store|null The store, or null if not registered.
+	 * @return Store|null The store, or null if not registered.
 	 * @since 1.0.0
 	 */
 	public function fetch_store() {
-        return Store::instance( trim( $this->namespace, '/v1' ) );
-    }
+		return Store::instance( trim( $this->namespace, '/v1' ) );
+	}
 
-    /**
+	/**
 	 * Retrieves the current collection.
 	 *
-     * @return Collection|null The collection, or null if not registered.
+	 * @return Collection|null The collection, or null if not registered.
 	 * @since 1.0.0
 	 */
 	public function fetch_collection() {
-        $store = $this->fetch_store();
-        return $store ? $store->get( $this->rest_base ) : null;
-    }
+		$store = $this->fetch_store();
+		return $store ? $store->get( $this->rest_base ) : null;
+	}
 
-    /**
+	/**
 	 * Registers REST routes.
 	 *
 	 * @since 1.0.0
@@ -61,7 +64,7 @@ class REST extends \WP_REST_Controller {
 			return;
 		}
 
-        // METHODS to CREATE new records and READ the entire collection.
+		// METHODS to CREATE new records and READ the entire collection.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base,
@@ -82,7 +85,7 @@ class REST extends \WP_REST_Controller {
 			)
 		);
 
-        // METHODS to READ, UPDATE and DELETE a single record.
+		// METHODS to READ, UPDATE and DELETE a single record.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/(?P<id>[\d]+)',
@@ -98,8 +101,8 @@ class REST extends \WP_REST_Controller {
 					'callback'            => array( $this, 'get_item' ),
 					'permission_callback' => array( $this, 'get_item_permissions_check' ),
 					'args'                => array(
-                        'context' => $this->get_context_param( array( 'default' => 'view' ) ),
-                    ),
+						'context' => $this->get_context_param( array( 'default' => 'view' ) ),
+					),
 				),
 				array(
 					'methods'             => \WP_REST_Server::EDITABLE,
@@ -475,7 +478,7 @@ class REST extends \WP_REST_Controller {
 		return apply_filters( "hizzle_rest_{$this->rest_base}_collection_params", $params, $this );
 	}
 
-    /**
+	/**
 	 * Retrieves the item's schema, conforming to JSON Schema.
 	 *
 	 * @since 1.0.0
@@ -483,8 +486,8 @@ class REST extends \WP_REST_Controller {
 	 * @return array Item schema data.
 	 */
 	public function get_item_schema() {
-        $collection = $this->fetch_collection();
-        $schema     = $collection ? $collection->get_schema() : array();
+		$collection = $this->fetch_collection();
+		$schema     = $collection ? $collection->get_schema() : array();
 		return $this->add_additional_fields_schema( $schema );
 	}
 
