@@ -185,7 +185,7 @@ class Record {
 	/**
 	 * Set object read property.
 	 *
-	 * @since 3.0.0
+	 * @since 1.0.0
 	 * @param boolean $read Should read?.
 	 */
 	public function set_object_read( $read = true ) {
@@ -195,7 +195,7 @@ class Record {
 	/**
 	 * Get object read property.
 	 *
-	 * @since  3.0.0
+	 * @since  1.0.0
 	 * @return boolean
 	 */
 	public function get_object_read() {
@@ -210,12 +210,16 @@ class Record {
 	 * @return bool result
 	 */
 	public function delete( $force_delete = false ) {
-		if ( $this->db ) {
-			call_user_func( array( $this->db, 'delete' ), $this, $force_delete );
-			$this->set_id( 0 );
+
+		try {
+
+			$collection = Collection::instance( $this->collection_name );
+			$collection->delete( $this, $force_delete );
 			return true;
+
+		} catch ( Store_Exception $e ) {
+			return new \WP_Error( $e->getErrorCode(), $e->getMessage(), $e->getErrorData() );
 		}
-		return false;
 	}
 
 	/**
@@ -225,24 +229,23 @@ class Record {
 	 * @return int|WP_Error
 	 */
 	public function save() {
-		if ( ! $this->db ) {
-			return $this->get_id();
-		}
 
-		do_action( $this->object_type . '_before_object_save', $this, $this->db );
+		do_action( $this->object_type . '_before_save', $this );
 
 		try {
 
-			if ( $this->get_id() ) {
-				call_user_func_array( array( $this->db, 'update' ), array( &$this ) );
+			$collection = Collection::instance( $this->collection_name );
+
+			if ( $this->exists() ) {
+				return $collection->update( $this );
 			} else {
-				call_user_func_array( array( $this->db, 'create' ), array( &$this ) );
+				return $collection->create( $this );
 			}
 		} catch ( Store_Exception $e ) {
 			return new \WP_Error( $e->getErrorCode(), $e->getMessage(), $e->getErrorData() );
 		}
 
-		do_action( $this->object_type . '_object_save', $this, $this->db );
+		do_action( $this->object_type . '_after_save', $this );
 
 		return $this->get_id();
 	}
@@ -260,7 +263,7 @@ class Record {
 	/**
 	 * Set all props to default values.
 	 *
-	 * @since 3.0.0
+	 * @since 1.0.0
 	 */
 	public function set_defaults() {
 		$this->data    = $this->default_data;
@@ -272,7 +275,7 @@ class Record {
 	 * Set a collection of props in one go, collect any errors, and return the result.
 	 * Only sets using public methods.
 	 *
-	 * @since  3.0.0
+	 * @since  1.0.0
 	 *
 	 * @param array  $props Key value pairs to set. Key is the prop and should map to a setter function name.
 	 * @param string $context In what context to run this.
@@ -285,7 +288,7 @@ class Record {
 		foreach ( $props as $prop => $value ) {
 			try {
 				/**
-				 * Checks if the prop being set is allowed, and the value is not null.
+				 * Checks if the prop being set is allowed.
 				 */
 				if ( in_array( $prop, array( 'prop', 'date_prop' ), true ) ) {
 					continue;
@@ -304,6 +307,51 @@ class Record {
 		}
 
 		return $errors && count( $errors->get_error_codes() ) ? $errors : true;
+	}
+
+	/**
+	 * Return data changes only.
+	 *
+	 * @since 1.0.0
+	 * @return array
+	 */
+	public function get_changes() {
+		return $this->changes;
+	}
+
+	/**
+	 * Merge changes with data and clear.
+	 *
+	 * @since 1.0.0
+	 */
+	public function apply_changes() {
+		$this->data    = array_replace_recursive( $this->data, $this->changes ); // @codingStandardsIgnoreLine
+		$this->changes = array();
+	}
+
+	/**
+	 * Gets a property.
+	 *
+	 * Gets the value from either current pending changes, or the data itself.
+	 * Context controls what happens to the value before it's returned.
+	 *
+	 * @since  1.0.0
+	 * @param  string $prop Name of prop to get.
+	 * @param  string $context What the value is for. Valid values are view and edit.
+	 * @return mixed
+	 */
+	public function get_prop( $prop, $context = 'view' ) {
+		$value = null;
+
+		if ( array_key_exists( $prop, $this->data ) ) {
+			$value = array_key_exists( $prop, $this->changes ) ? $this->changes[ $prop ] : $this->data[ $prop ];
+
+			if ( 'view' === $context ) {
+				$value = apply_filters( $this->object_type . '_get_' . $prop, $value, $this );
+			}
+		}
+
+		return $value;
 	}
 
 	/**
@@ -329,64 +377,27 @@ class Record {
 	}
 
 	/**
-	 * Return data changes only.
+	 * Sets a prop.
 	 *
-	 * @since 3.0.0
-	 * @return array
+	 * @since 1.0.0
+	 * @param string $prop Name of prop to set.
+	 * @param mixed  $value Value of the prop.
 	 */
-	public function get_changes() {
-		return $this->changes;
-	}
+	public function set( $prop, $value ) {
 
-	/**
-	 * Merge changes with data and clear.
-	 *
-	 * @since 3.0.0
-	 */
-	public function apply_changes() {
-		$this->data    = array_replace_recursive( $this->data, $this->changes ); // @codingStandardsIgnoreLine
-		$this->changes = array();
-	}
+		$setter = "set_$prop";
 
-	/**
-	 * Prefix for action and filter hooks on data.
-	 *
-	 * @since  3.0.0
-	 * @return string
-	 */
-	protected function get_hook_prefix() {
-		return $this->object_type . '_get_';
-	}
-
-	/**
-	 * Gets a prop for a getter method.
-	 *
-	 * Gets the value from either current pending changes, or the data itself.
-	 * Context controls what happens to the value before it's returned.
-	 *
-	 * @since  3.0.0
-	 * @param  string $prop Name of prop to get.
-	 * @param  string $context What the value is for. Valid values are view and edit.
-	 * @return mixed
-	 */
-	protected function get_prop( $prop, $context = 'view' ) {
-		$value = null;
-
-		if ( array_key_exists( $prop, $this->data ) ) {
-			$value = array_key_exists( $prop, $this->changes ) ? $this->changes[ $prop ] : $this->data[ $prop ];
-
-			if ( 'view' === $context ) {
-				$value = apply_filters( $this->get_hook_prefix() . $prop, $value, $this );
-			}
+		if ( is_callable( array( $this, $setter ) ) ) {
+			return $this->{$setter}( $value );
 		}
 
-		return $value;
+		return $this->set_prop( $prop, $value );
 	}
 
 	/**
 	 * Sets a date prop whilst handling formatting and datetime objects.
 	 *
-	 * @since 3.0.0
+	 * @since 1.0.0
 	 * @param string         $prop Name of prop to set.
 	 * @param string|integer $value Value of the prop.
 	 */
@@ -398,20 +409,20 @@ class Record {
 			}
 
 			// Create date/time object from passed date value.
-			if ( is_a( $value, 'Hpay_DateTime' ) ) {
+			if ( $value instanceof Date_Time ) {
 				$datetime = $value;
 			} elseif ( is_numeric( $value ) ) {
 				// Timestamps are handled as UTC timestamps in all cases.
-				$datetime = new \Hpay_DateTime( "@{$value}", new \DateTimeZone( 'UTC' ) );
+				$datetime = new Date_Time( "@{$value}", new \DateTimeZone( 'UTC' ) );
 			} else {
 				// Strings are defined in local WP timezone. Convert to UTC.
 				if ( 1 === preg_match( '/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(Z|((-|\+)\d{2}:\d{2}))$/', $value, $date_bits ) ) {
-					$offset    = ! empty( $date_bits[7] ) ? iso8601_timezone_to_offset( $date_bits[7] ) : hpay_timezone_offset();
+					$offset    = ! empty( $date_bits[7] ) ? iso8601_timezone_to_offset( $date_bits[7] ) : wp_timezone()->getOffset( new \DateTime( 'now' ) );
 					$timestamp = gmmktime( $date_bits[4], $date_bits[5], $date_bits[6], $date_bits[2], $date_bits[3], $date_bits[1] ) - $offset;
+					$datetime  = new Date_Time( "@{$timestamp}", new \DateTimeZone( 'UTC' ) );
 				} else {
-					$timestamp = hpay_strtotime( get_gmt_from_date( gmdate( 'Y-m-d H:i:s', hpay_strtotime( $value ) ) ) );
+					$datetime = new Date_Time( $value, wp_timezone() );
 				}
-				$datetime = new \Hpay_DateTime( "@{$timestamp}", new \DateTimeZone( 'UTC' ) );
 			}
 
 			// Set local timezone or offset.
@@ -419,20 +430,6 @@ class Record {
 
 			$this->set_prop( $prop, $datetime );
 		} catch ( \Exception $e ) {} // @codingStandardsIgnoreLine.
-	}
-
-	/**
-	 * When invalid data is found, throw an exception unless reading from the DB.
-	 *
-	 * @throws Store_Exception Data Exception.
-	 * @since 3.0.0
-	 * @param string $code             Error code.
-	 * @param string $message          Error message.
-	 * @param int    $http_status_code HTTP status code.
-	 * @param array  $data             Extra error data.
-	 */
-	protected function error( $code, $message, $http_status_code = 400, $data = array() ) {
-		throw new Store_Exception( $code, $message, $http_status_code, $data );
 	}
 
 }

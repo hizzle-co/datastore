@@ -574,7 +574,7 @@ class Collection {
 			}
 
 			// Date fields.
-			if ( $value instanceof \Hpay_DateTime ) {
+			if ( $value instanceof Date_Time ) {
 				$value = $value->utc();
 			}
 
@@ -639,7 +639,7 @@ class Collection {
 
 		// Save date created in UTC time.
 		if ( ! $this->is_cpt() && isset( $this->props['date_created'] ) && empty( $fields['date_created'] ) ) {
-			$fields['date_created'] = new \Hpay_DateTime( 'now', new \DateTimeZone( 'UTC' ) );
+			$fields['date_created'] = new Date_Time( 'now', new \DateTimeZone( 'UTC' ) );
 		}
 
 		// Insert values in the db.
@@ -747,7 +747,7 @@ class Collection {
 			// Dates are stored in UTC time, but without a timezone.
 			// Fix that.
 			if ( $prop->is_date() && ! empty( $data[ $prop->name ] ) ) {
-				$data[ $prop->name ] = new \Hpay_DateTime( $data[ $prop->name ], new \DateTimeZone( 'UTC' ) );
+				$data[ $prop->name ] = new Date_Time( $data[ $prop->name ], new \DateTimeZone( 'UTC' ) );
 			}
 		}
 
@@ -807,7 +807,7 @@ class Collection {
 		// Update meta data.
 		// Save date modified in UTC time.
 		if ( ! $this->is_cpt() && isset( $data_types['date_modified'] ) ) {
-			$fields['date_modified'] = new \Hpay_DateTime( 'now', new \DateTimeZone( 'UTC' ) );
+			$fields['date_modified'] = new Date_Time( 'now', new \DateTimeZone( 'UTC' ) );
 			$formats[]               = $data_types['date_modified'];
 
 			$record->set_props( array( 'date_modified' => $fields['date_modified'] ) );
@@ -860,6 +860,17 @@ class Collection {
 		do_action( $this->hook_prefix( 'deleted', true ), $record, $delete_permanently );
 
 		$record->set_id( 0 );
+	}
+
+	/**
+	 * Deletes all objects matching the query.
+	 *
+	 * @param array $where An array of $prop => $value pairs.
+	 */
+	public function delete_where( $where ) {
+		global $wpdb;
+
+		$wpdb->delete( $this->get_db_table_name(), $where, array( '%d' ) );
 	}
 
 	/**
