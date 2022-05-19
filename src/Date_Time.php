@@ -65,7 +65,12 @@ class Date_Time extends \DateTime {
 	 * @param  string $format Date format.
 	 * @return string
 	 */
-	public function date_i18n( $format = 'Y-m-d' ) {
+	public function date_i18n( $format = null ) {
+
+		if ( empty( $format ) ) {
+			$format = get_option( 'date_format', 'Y-m-d' );
+		}
+
 		return date_i18n( $format, $this->getOffsetTimestamp() );
 	}
 

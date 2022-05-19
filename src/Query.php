@@ -115,38 +115,21 @@ class Query {
 	 * @param array  $query The actual query.
 	 */
 	public function __construct( $collection_name, $query = array() ) {
-		global $wpdb;
 
 		$this->collection_name = $collection_name;
 
 		// Prepare the query.
 		$this->prepare_query( $query );
 
-		// Allow third party plugins to modify the query.
-		$collection    = Collection::instance( $this->collection_name );
-		$this->results = apply_filters_ref_array( $collection->hook_prefix( 'pre_query' ), array( null, &$this ) );
+		// Run the query.
+		$aggregate = ! empty( $this->query_vars['aggregate'] );
 
-		if ( null === $this->results ) {
-			$this->request = "SELECT $this->query_fields $this->query_from $this->query_where $this->query_orderby $this->query_limit";
-
-			$aggregate = ! empty( $this->query_vars['aggregate'] );
-
-			if ( $aggregate ) {
-				$this->aggregate = $this->get_aggregate();
-			} else {
-				$this->results = $this->get_results();
-			}
-
-			if ( ( is_array( $this->query_vars['fields'] ) && 1 !== count( $this->query_vars['fields'] ) ) || 'all' === $this->query_vars['fields'] ) {
-				$this->results = $wpdb->get_results( $this->request ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-			} else {
-				$this->results = $wpdb->get_col( $this->request ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-			}
-
-			if ( isset( $qv['count_total'] ) && $qv['count_total'] ) {
-				$this->total_results = (int) $wpdb->get_var( 'SELECT FOUND_ROWS()' );
-			}
+		if ( $aggregate ) {
+			$this->query_aggregate();
+		} else {
+			$this->query_results();
 		}
+
 	}
 
 	/**
@@ -193,6 +176,9 @@ class Query {
 		if ( isset( $qv['count_total'] ) && $qv['count_total'] ) {
 			$this->query_fields = 'SQL_CALC_FOUND_ROWS ' . $this->query_fields;
 		}
+
+		// Prepare where query.
+		$this->prepare_where_query( $qv, $table );
 
 		// Sorting.
 		if ( ! $aggregate ) {
@@ -298,14 +284,6 @@ class Query {
 
 			$rest_schema = $field->get_rest_schema();
 			$data_type   = $field->get_data_type();
-
-			if ( isset( $rest_schema['enum'] ) ) {
-				$query_schema[ $this->name ]['enum'] = $rest_schema['enum'];
-			}
-
-			if ( isset( $rest_schema['default'] ) ) {
-				$query_schema[ $this->name ]['default'] = $rest_schema['default'];
-			}
 
 			// Normal $field = 'x' filters.
 			if ( isset( $qv[ $key ] ) && 'any' !== $qv[ $key ] ) {
@@ -565,16 +543,6 @@ class Query {
 	 * @return array[]|int[]|Record[]
 	 */
 	public function get_results() {
-
-		// Read from cache if available.
-		if ( is_array( $this->results ) ) {
-			return $this->results;
-		}
-
-		// Run query.
-		$this->fetch_results();
-
-		// Return found results.
 		return $this->results;
 	}
 
@@ -586,24 +554,14 @@ class Query {
 	 * @return int Number of total records.
 	 */
 	public function get_total() {
-
-		// Read from cache if available.
-		if ( is_int( $this->total_results ) ) {
-			return $this->total_results;
-		}
-
-		// Run query.
-		$this->fetch_results();
-
-		// Return found results.
 		return $this->total_results;
 	}
 
 	/**
-	 * Fetches the query results.
+	 * Runs the query.
 	 *
 	 */
-	public function fetch_results() {
+	protected function query_results() {
 		global $wpdb;
 
 		$this->total_results = 0;
@@ -633,7 +591,7 @@ class Query {
 
 				if ( isset( $result->id ) ) {
 					// Cache object.
-					$collection->update_cache( $result );
+					$collection->update_cache( (array) $result );
 
 					// Replace raw data with Record objects.
 					$this->results[ $key ] = $collection->get( $result->id );
@@ -648,11 +606,15 @@ class Query {
 	 * @return int|float|array
 	 */
 	public function get_aggregate() {
-		global $wpdb;
+		return $this->aggregate;
+	}
 
-		if ( null !== $this->aggregate ) {
-			return $this->aggregate;
-		}
+	/**
+	 * RUns an aggregate query.
+	 *
+	 */
+	protected function query_aggregate() {
+		global $wpdb;
 
 		// Allow third party plugins to modify the query.
 		$collection      = Collection::instance( $this->collection_name );
@@ -669,7 +631,6 @@ class Query {
 			}
 		}
 
-		return $this->aggregate;
 	}
 
 }

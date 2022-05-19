@@ -114,13 +114,13 @@ class REST extends \WP_REST_Controller {
 					'methods'             => \WP_REST_Server::DELETABLE,
 					'callback'            => array( $this, 'delete_item' ),
 					'permission_callback' => array( $this, 'delete_item_permissions_check' ),
-					'args'                => array(
+					'args'                => $collection->is_cpt() ? array(
 						'force' => array(
-							'type'        => 'boolean',
 							'default'     => false,
-							'description' => __( 'Whether to bypass Trash and force deletion.', 'hizzle-store' ),
+							'type'        => 'boolean',
+							'description' => __( 'Whether to bypass trash and force deletion.', 'hizzle-store' ),
 						),
-					),
+					) : array(),
 				),
 				'schema' => array( $this, 'get_public_item_schema' ),
 			)
@@ -487,7 +487,7 @@ class REST extends \WP_REST_Controller {
 	 */
 	public function get_item_schema() {
 		$collection = $this->fetch_collection();
-		$schema     = $collection ? $collection->get_schema() : array();
+		$schema     = $collection ? $collection->get_rest_schema() : array();
 		return $this->add_additional_fields_schema( $schema );
 	}
 

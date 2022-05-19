@@ -207,7 +207,7 @@ class Record {
 	 *
 	 * @since  1.0.0
 	 * @param  bool $force_delete Should the data be deleted permanently.
-	 * @return bool result
+	 * @return bool|\WP_Error result
 	 */
 	public function delete( $force_delete = false ) {
 

@@ -780,11 +780,11 @@ class Collection {
 			if ( in_array( $key, $changes, true ) ) {
 
 				// Post fields.
-				if ( $this->is_cpt() && in_array( $prop, array_keys( $this->post_map ), true ) ) {
-					$post_args[ $this->post_map[ $prop ] ] = $record->{"get_$prop"}( 'edit' );
-				} elseif ( isset( $data_types[ $prop ] ) ) {
-					$fields[ $prop ] = $record->{"get_$prop"}( 'edit' );
-					$formats[]       = $data_types[ $prop ];
+				if ( $this->is_cpt() && in_array( $key, array_keys( $this->post_map ), true ) ) {
+					$post_args[ $this->post_map[ $key ] ] = $record->{"get_$key"}( 'edit' );
+				} else {
+					$fields[ $key ] = $record->{"get_$key"}( 'edit' );
+					$formats[]      = $prop->get_data_type();
 				}
 			}
 		}
@@ -806,9 +806,9 @@ class Collection {
 
 		// Update meta data.
 		// Save date modified in UTC time.
-		if ( ! $this->is_cpt() && isset( $data_types['date_modified'] ) ) {
+		if ( ! $this->is_cpt() && isset( $this->props['date_modified'] ) ) {
 			$fields['date_modified'] = new Date_Time( 'now', new \DateTimeZone( 'UTC' ) );
-			$formats[]               = $data_types['date_modified'];
+			$formats[]               = '%s';
 
 			$record->set_props( array( 'date_modified' => $fields['date_modified'] ) );
 		}
@@ -915,9 +915,19 @@ class Collection {
 	/**
 	 * Update caches.
 	 *
-	 * @param array $record The raw db record.
+	 * @param array|Record $record The raw db record.
 	 */
 	public function update_cache( $record ) {
+
+		// Check if a record instance was passed.
+		if ( is_object( $record ) && is_callable( array( $record, 'get_data' ) ) ) {
+			$record = $record->get_data();
+		}
+
+		// Ensure we have an array.
+		if ( ! is_array( $record ) ) {
+			return;
+		}
 
 		foreach ( $this->get_cache_keys() as $key ) {
 			wp_cache_set( $record[ $key ], $record['id'], $this->hook_prefix( 'ids_by_' . $key ) );

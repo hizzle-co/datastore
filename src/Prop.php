@@ -257,6 +257,8 @@ class Prop {
 		// Nullable.
 		if ( $this->nullable ) {
 			$schema['type'] = array( $schema['type'], 'null' );
+		} else {
+			$schema['required'] = true;
 		}
 
 		// Enum.
@@ -356,7 +358,7 @@ class Prop {
 		}
 
 		// Numbers & Floats.
-		if ( $this->is_numeric() || $this->is_float() ) {
+		if ( $this->is_float() ) {
 
 			$query_schema[ "{$this->name}_min" ] = array(
 				'description'       => sprintf(
@@ -379,8 +381,8 @@ class Prop {
 			);
 
 			if ( ! empty( $rest_schema['maximum'] ) ) {
-				$query_schema[ "{$this->name}_min" ]['minimum'] = $rest_schema['minimum'];
-				$query_schema[ "{$this->name}_max" ]['minimum'] = $rest_schema['minimum'];
+				$query_schema[ "{$this->name}_min" ]['maximum'] = $rest_schema['maximum'];
+				$query_schema[ "{$this->name}_max" ]['maximum'] = $rest_schema['maximum'];
 			}
 		}
 
