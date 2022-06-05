@@ -464,7 +464,7 @@ class Query {
 	protected function parse_orderby( $orderby, $table ) {
 
 		$_orderby = '';
-		if ( array_key_exists( $orderby, $this->get_known_fields() ) ) {
+		if ( in_array( $orderby, $this->get_known_fields(), true ) ) {
 			$_orderby = "$table.$orderby";
 		} elseif ( 'id' === strtolower( $orderby ) ) {
 			$_orderby = "$table.id";

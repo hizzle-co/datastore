@@ -226,7 +226,7 @@ class Record {
 	 * Save should create or update based on object existence.
 	 *
 	 * @since  1.0.0
-	 * @return int|WP_Error
+	 * @return int|\WP_Error
 	 */
 	public function save() {
 
@@ -237,9 +237,9 @@ class Record {
 			$collection = Collection::instance( $this->collection_name );
 
 			if ( $this->exists() ) {
-				return $collection->update( $this );
+				$collection->update( $this );
 			} else {
-				return $collection->create( $this );
+				$collection->create( $this );
 			}
 		} catch ( Store_Exception $e ) {
 			return new \WP_Error( $e->getErrorCode(), $e->getMessage(), $e->getErrorData() );
@@ -278,11 +278,11 @@ class Record {
 	 * @since  1.0.0
 	 *
 	 * @param array  $props Key value pairs to set. Key is the prop and should map to a setter function name.
-	 * @param string $context In what context to run this.
+	 * @param bool $skip_null Skip null values.
 	 *
 	 * @return bool|WP_Error
 	 */
-	public function set_props( $props ) {
+	public function set_props( $props, $skip_null = false ) {
 		$errors = false;
 
 		foreach ( $props as $prop => $value ) {
@@ -290,7 +290,7 @@ class Record {
 				/**
 				 * Checks if the prop being set is allowed.
 				 */
-				if ( in_array( $prop, array( 'prop', 'date_prop' ), true ) ) {
+				if ( in_array( $prop, array( 'prop', 'date_prop' ), true ) || ( $skip_null && null === $value ) ) {
 					continue;
 				}
 				$setter = "set_$prop";
@@ -430,6 +430,75 @@ class Record {
 
 			$this->set_prop( $prop, $datetime );
 		} catch ( \Exception $e ) {} // @codingStandardsIgnoreLine.
+	}
+
+	/**
+	 * Sets the meta data for an object.
+	 *
+	 * @since 1.0.0
+	 * @param array $metadata Array of meta data.
+	 */
+	public function set_metadata( $metadata ) {
+		$this->set_prop( 'metadata', $metadata );
+	}
+
+	/**
+	 * Adds / Updates meta data for an object.
+	 *
+	 * @since 1.0.0
+	 * @param string $meta_key meta key.
+	 * @param mixed $value meta value.
+	 */
+	public function add_meta( $meta_key, $value ) {
+		$metadata = $this->get_metadata();
+
+		if ( null === $value ) {
+			unset( $metadata[ $meta_key ] );
+		} else {
+			$metadata[ $meta_key ] = $value;
+		}
+
+		$this->set_metadata( $metadata );
+	}
+
+	/**
+	 * Removes meta data for an object.
+	 *
+	 * @since 1.0.0
+	 * @param string $meta_key meta key.
+	 */
+	public function remove_meta( $meta_key ) {
+		$metadata = $this->get_metadata();
+		unset( $metadata[ $meta_key ] );
+		$this->set_metadata( $metadata );
+	}
+
+	/**
+	 * Retrieves an array of meta data for an object.
+	 * 
+	 * @since 1.0.0
+	 * @return array
+	 */
+	public function get_metadata() {
+		$metadata = $this->get_prop( 'metadata', 'edit' );
+		return is_array( $metadata ) ? $metadata : array();
+	}
+
+	/**
+	 * Retrieves the value of a meta data property.
+	 *
+	 * @since 1.0.0
+	 * @param string $meta_key meta key.
+	 * @return null|mixed
+	 */
+	public function get_meta( $meta_key ) {
+		$metadata = $this->get_metadata();
+
+		if ( isset( $metadata[ $meta_key ] ) ) {
+			return $metadata[ $meta_key ];
+		}
+
+		return null;
 	}
 
 }

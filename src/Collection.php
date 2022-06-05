@@ -642,6 +642,11 @@ class Collection {
 			$fields['date_created'] = new Date_Time( 'now', new \DateTimeZone( 'UTC' ) );
 		}
 
+		// Save date modified in UTC time.
+		if ( ! $this->is_cpt() && isset( $this->props['date_modified'] ) ) {
+			$fields['date_modified'] = new Date_Time( 'now', new \DateTimeZone( 'UTC' ) );
+		}
+
 		// Insert values in the db.
 		$result = $wpdb->insert(
 			$this->get_db_table_name(),
@@ -652,7 +657,7 @@ class Collection {
 		// If the insert failed, throw an exception.
 		if ( $result ) {
 
-			if ( ! $this->is_cpt() ) {
+			if ( ! $record->exists() ) {
 				$record->set_id( $wpdb->insert_id );
 			}
 
@@ -866,11 +871,12 @@ class Collection {
 	 * Deletes all objects matching the query.
 	 *
 	 * @param array $where An array of $prop => $value pairs.
+	 * @return int|false — The number of rows updated, or false on error.
 	 */
 	public function delete_where( $where ) {
 		global $wpdb;
 
-		$wpdb->delete( $this->get_db_table_name(), $where, array( '%d' ) );
+		return $wpdb->delete( $this->get_db_table_name(), $where );
 	}
 
 	/**
