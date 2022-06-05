@@ -439,7 +439,28 @@ class Record {
 	 * @param array $metadata Array of meta data.
 	 */
 	public function set_metadata( $metadata ) {
-		$this->set_prop( 'metadata', $metadata );
+
+		// Maybe decode JSON.
+		if ( is_string( $metadata ) ) {
+			$metadata = json_decode( $metadata, true );
+		}
+
+		// Ensure we have an array.
+		if ( ! is_array( $metadata ) ) {
+			$metadata = array();
+		}
+
+		// Remove unset meta keys.
+		$prepared = array();
+
+		foreach ( $metadata as $key => $value ) {
+			if ( null !== $value && '' !== $value ) {
+				$prepared[ $key ] = $value;
+			}
+		}
+
+		// Update the meta.
+		$this->set_prop( 'metadata', $prepared );
 	}
 
 	/**
@@ -477,11 +498,13 @@ class Record {
 	 * Retrieves an array of meta data for an object.
 	 * 
 	 * @since 1.0.0
-	 * @return array
+	 * @param string $context Context to retrieve meta data for.
+	 * @return array|string
 	 */
-	public function get_metadata() {
+	public function get_metadata( $context = 'view' ) {
 		$metadata = $this->get_prop( 'metadata', 'edit' );
-		return is_array( $metadata ) ? $metadata : array();
+		$metadata = is_array( $metadata ) ? $metadata : array();
+		return 'edit' === $context ? wp_json_encode( $metadata ) : $metadata;
 	}
 
 	/**
