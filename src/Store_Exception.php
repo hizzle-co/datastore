@@ -74,4 +74,14 @@ class Store_Exception extends \Exception {
 		return isset( $this->error_data[ $key ] ) ? $this->error_data[ $key ] : $default;
 	}
 
+	/**
+	 * Sets an error data value.
+	 *
+	 * @param string $key Key of the data to retrieve.
+	 * @param mixed  $value The value of the key
+	 */
+	public function setErrorDataValue( $key, $value ) {
+		$this->error_data[ $key ] = $value;
+	}
+
 }

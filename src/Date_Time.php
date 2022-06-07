@@ -68,7 +68,7 @@ class Date_Time extends \DateTime {
 	public function date_i18n( $format = null ) {
 
 		if ( empty( $format ) ) {
-			$format = get_option( 'date_format', 'Y-m-d' );
+			$format = get_option( 'date_format', 'F j, Y' );
 		}
 
 		return date_i18n( $format, $this->getOffsetTimestamp() );

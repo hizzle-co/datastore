@@ -470,7 +470,7 @@ class Record {
 	 * @param string $meta_key meta key.
 	 * @param mixed $value meta value.
 	 */
-	public function add_meta( $meta_key, $value ) {
+	public function update_meta( $meta_key, $value ) {
 		$metadata = $this->get_metadata();
 
 		if ( null === $value ) {
@@ -512,16 +512,17 @@ class Record {
 	 *
 	 * @since 1.0.0
 	 * @param string $meta_key meta key.
-	 * @return null|mixed
+	 * @param mixed $default default value.
+	 * @return mixed
 	 */
-	public function get_meta( $meta_key ) {
+	public function get_meta( $meta_key, $default = null ) {
 		$metadata = $this->get_metadata();
 
 		if ( isset( $metadata[ $meta_key ] ) ) {
 			return $metadata[ $meta_key ];
 		}
 
-		return null;
+		return $default;
 	}
 
 }
