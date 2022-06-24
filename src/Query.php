@@ -93,6 +93,14 @@ class Query {
 	public $query_where;
 
 	/**
+	 * Contains the 'GROUP BY' sql clause
+	 *
+	 * @since 1.0.0
+	 * @var string
+	 */
+	public $query_groupby;
+
+	/**
 	 * Contains the 'ORDER BY' sql clause
 	 *
 	 * @since 1.0.0
@@ -122,9 +130,7 @@ class Query {
 		$this->prepare_query( $query );
 
 		// Run the query.
-		$aggregate = ! empty( $this->query_vars['aggregate'] );
-
-		if ( $aggregate ) {
+		if ( ! empty( $this->query_vars['aggregate'] ) ) {
 			$this->query_aggregate();
 		} else {
 			$this->query_results();
@@ -135,7 +141,7 @@ class Query {
 	/**
 	 * Prepare the query variables.
 	 *
-	 * Open https://yourwebsite.com/wp-json/$namespace/v1/$collection/ to see the  allowedquery parameters.
+	 * Open https://yourwebsite.com/wp-json/$namespace/v1/$collection/ to see the allowed query parameters.
 	 *
 	 * @since 1.0.0
 	 *
@@ -164,16 +170,17 @@ class Query {
 		// Prepare the query FROM.
 		$this->query_from    = "FROM $table";
 		$this->query_orderby = '';
+		$this->query_groupby = '';
 
 		// Prepare query fields.
 		if ( $aggregate ) {
-			$this->prepare_aggregate_query( $aggregate, $table );
+			$this->prepare_aggregate_query( $qv, $table );
 		} else {
 			$this->prepare_fields( $qv, $table );
 		}
 
 		// Set whether or not to count the total number of found records.
-		if ( isset( $qv['count_total'] ) && $qv['count_total'] ) {
+		if ( ! $aggregate && isset( $qv['count_total'] ) && $qv['count_total'] ) {
 			$this->query_fields = 'SQL_CALC_FOUND_ROWS ' . $this->query_fields;
 		}
 
@@ -202,17 +209,19 @@ class Query {
 	 * Aggregates field data clauses.
 	 *
 	 * @since 1.0.0
-	 * @param array $fields The fields to aggregate.
+	 * @param array $qv The query vars.
 	 * @param string $table The table name.
 	 * @global \wpdb $wpdb WordPress database abstraction object.
 	 */
-	public function prepare_aggregate_query( $fields, $table ) {
+	protected function prepare_aggregate_query( $qv, $table ) {
 
 		$known_fields       = $this->get_known_fields();
+		$aggregate_fields   = $qv['aggregate'];
 		$this->query_fields = array();
-		// TODO: Add support for query_groupby and query_join.
+		// TODO: Add support fo query_join.
 
-		foreach ( $fields as $field => $function ) {
+		// Prepare aggregate fields.
+		foreach ( $aggregate_fields as $field => $function ) {
 
 			// Ensure the field is supported.
 			$field = esc_sql( sanitize_key( $field ) );
@@ -231,12 +240,43 @@ class Query {
 
 		}
 
+		// Prepare groupby fields.
+		if ( ! empty( $qv['groupby'] ) ) {
+			foreach ( wp_parse_list( $qv['groupby'] ) as $field ) {
+
+				// Ensure the field is supported.
+				$field = esc_sql( sanitize_key( $field ) );
+				if ( ! in_array( $field, $known_fields, true ) ) {
+					throw new Store_Exception( 'query_invalid_field', __( 'Invalid group by field.', 'hizzle-store' ) );
+				}
+
+				$this->query_groupby .= ", $table.$field";
+				$this->query_fields[] = "$table.$field";
+			}
+
+			$this->query_groupby = 'GROUP BY ' . ltrim( $this->query_groupby, ',' );
+		}
+
+		// Add extra fields.
+		if ( ! empty( $qv['extra_fields'] ) ) {
+			foreach ( wp_parse_list( $qv['extra_fields'] ) as $field ) {
+
+				// Ensure the field is supported.
+				$field = esc_sql( sanitize_key( $field ) );
+				if ( ! in_array( $field, $known_fields, true ) ) {
+					throw new Store_Exception( 'query_invalid_field', __( 'Invalid extra field.', 'hizzle-store' ) );
+				}
+
+				$this->query_fields[] = "$table.$field";
+			}
+		}
+
 		// Abort if no fields were aggregated.
 		if ( empty( $this->query_fields ) ) {
 			throw new Store_Exception( 'query_missing_aggregate_fields', __( 'Missing aggregate fields.', 'hizzle-store' ) );
 		}
 
-		$this->query_fields = implode( ', ', $this->query_fields );
+		$this->query_fields  = implode( ', ', $this->query_fields );
 	}
 
 	/**
@@ -247,7 +287,7 @@ class Query {
 	 * @param string $table The table name.
 	 * @global \wpdb $wpdb WordPress database abstraction object.
 	 */
-	public function prepare_fields( $qv, $table ) {
+	protected function prepare_fields( $qv, $table ) {
 
 		if ( is_array( $qv['fields'] ) ) {
 			$qv['fields'] = array_unique( $qv['fields'] );
@@ -622,13 +662,8 @@ class Query {
 
 		// Run query if it was not short-circuted.
 		if ( null === $this->aggregate ) {
-			$this->request = "SELECT $this->query_fields $this->query_from $this->query_where $this->query_limit";
-
-			if ( ( is_array( $this->query_vars['aggregate'] ) && 1 === count( $this->query_vars['aggregate'] ) ) ) {
-				$this->aggregate = $wpdb->get_col( $this->request ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-			} else {
-				$this->aggregate = $wpdb->get_results( $this->request ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-			}
+			$this->request   = "SELECT $this->query_fields $this->query_from $this->query_where $this->query_groupby $this->query_limit";
+			$this->aggregate = $wpdb->get_results( $this->request ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 		}
 
 	}
