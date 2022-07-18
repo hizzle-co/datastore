@@ -63,15 +63,17 @@ class Date_Time extends \DateTime {
 	 *
 	 * @since  1.0.0
 	 * @param  string $format Date format.
+	 * @param  bool   $gmt    Whether to use GMT timezone.
 	 * @return string
 	 */
-	public function date_i18n( $format = null ) {
+	public function date_i18n( $format = null, $gmt = false ) {
 
 		if ( empty( $format ) ) {
 			$format = get_option( 'date_format', 'F j, Y' );
 		}
 
-		return date_i18n( $format, $this->getOffsetTimestamp() );
+		$timestamp = $gmt ? $this->getTimestamp() : $this->getOffsetTimestamp();
+		return date_i18n( $format, $timestamp );
 	}
 
 }

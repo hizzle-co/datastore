@@ -85,6 +85,14 @@ class Query {
 	public $query_from;
 
 	/**
+	 * Contains the 'LEFT JOIN' sql clause
+	 *
+	 * @since 1.0.0
+	 * @var string
+	 */
+	public $query_join;
+
+	/**
 	 * Contains the 'WHERE' sql clause
 	 *
 	 * @since 1.0.0
@@ -152,6 +160,7 @@ class Query {
 
 		$collection        = Collection::instance( $this->collection_name );
 		$this->query_limit = null;
+		$this->query_join  = '';
 		$this->query_vars  = $this->fill_query_vars( $query );
 
 		if ( ! empty( $this->query_vars['fields'] ) && 'all' !== $this->query_vars['fields'] ) {
@@ -171,6 +180,11 @@ class Query {
 		$this->query_from    = "FROM $table";
 		$this->query_orderby = '';
 		$this->query_groupby = '';
+
+		// Prepare joins.
+		if ( $collection->is_cpt() ) {
+			$this->query_join .= " LEFT JOIN {$wpdb->posts} ON $table.id = {$wpdb->posts}.ID";
+		}
 
 		// Prepare query fields.
 		if ( $aggregate ) {
@@ -236,7 +250,8 @@ class Query {
 			}
 
 			$function             = strtolower( $function );
-			$this->query_fields[] = "$function_upper($table.$field) AS {$function}_{$field}";
+			$table_field          = $this->prefix_field( $field );
+			$this->query_fields[] = "$function_upper($table_field) AS {$function}_{$field}";
 
 		}
 
@@ -250,8 +265,8 @@ class Query {
 					throw new Store_Exception( 'query_invalid_field', __( 'Invalid group by field.', 'hizzle-store' ) );
 				}
 
-				$this->query_groupby .= ", $table.$field";
-				$this->query_fields[] = "$table.$field";
+				$this->query_groupby .= ', ' . $this->prefix_field( $field );
+				$this->query_fields[] = $this->prefix_field( $field );
 			}
 
 			$this->query_groupby = 'GROUP BY ' . ltrim( $this->query_groupby, ',' );
@@ -267,7 +282,7 @@ class Query {
 					throw new Store_Exception( 'query_invalid_field', __( 'Invalid extra field.', 'hizzle-store' ) );
 				}
 
-				$this->query_fields[] = "$table.$field";
+				$this->query_fields[] = $this->prefix_field( $field );
 			}
 		}
 
@@ -295,11 +310,11 @@ class Query {
 			$this->query_fields = array();
 			foreach ( $qv['fields'] as $field ) {
 				$field                = 'id' === strtolower( $field ) ? 'id' : sanitize_key( $field );
-				$this->query_fields[] = "$table.$field";
+				$this->query_fields[] = $this->prefix_field( $field );
 			}
 			$this->query_fields = implode( ',', $this->query_fields );
 		} elseif ( 'all' === $qv['fields'] ) {
-			$this->query_fields = "$table.*";
+			$this->query_fields = '*';
 		} else {
 			$this->query_fields = "$table.id";
 		}
@@ -324,15 +339,16 @@ class Query {
 
 			$rest_schema = $field->get_rest_schema();
 			$data_type   = $field->get_data_type();
+			$field_name  = $this->prefix_field( $key );
 
 			// Normal $field = 'x' filters.
 			if ( isset( $qv[ $key ] ) && 'any' !== $qv[ $key ] ) {
 
 				if ( is_array( $qv[ $key ] ) ) {
 					$enums              = implode( ',', array_map( 'esc_sql', $qv[ $key ] ) );
-					$this->query_where .= " AND $table.$key IN ($enums)";
+					$this->query_where .= " AND $field_name IN ($enums)";
 				} else {
-					$this->query_where .= $wpdb->prepare( " AND $table.$key=$data_type", $qv[ $key ] ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+					$this->query_where .= $wpdb->prepare( " AND $field_name=$data_type", $qv[ $key ] ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 				}
 			}
 
@@ -340,7 +356,7 @@ class Query {
 			if ( $field->is_date() ) {
 
 				$date_query = array(
-					'column'   => "$table.$key",
+					'column'   => $field_name,
 					'relation' => 'AND',
 				);
 
@@ -358,7 +374,7 @@ class Query {
 
 				if ( 2 < count( $date_query ) ) {
 
-					$date_query         = new \WP_Date_Query( $date_query, "$table.$key" );
+					$date_query         = new \WP_Date_Query( $date_query, $this->prefix_field( $key ) );
 					$this->query_where .= $date_query->get_sql();
 				}
 			}
@@ -367,11 +383,11 @@ class Query {
 			if ( $field->is_numeric() || $field->is_float() ) {
 
 				if ( ! empty( $qv[ "{$key}_min" ] ) ) {
-					$this->query_where .= $wpdb->prepare( " AND $table.$key >= $data_type", $qv[ "{$key}_min" ] ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+					$this->query_where .= $wpdb->prepare( " AND $field_name >= $data_type", $qv[ "{$key}_min" ] ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 				}
 
 				if ( ! empty( $qv[ "{$key}_max" ] ) ) {
-					$this->query_where .= $wpdb->prepare( " AND $table.$key <= $data_type", $qv[ "{$key}_max" ] ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+					$this->query_where .= $wpdb->prepare( " AND $field_name <= $data_type", $qv[ "{$key}_max" ] ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 				}
 			}
 		}
@@ -430,7 +446,7 @@ class Query {
 			if ( 'id' === $col ) {
 				$searches[] = $wpdb->prepare( "$table_name.$col = %s", $string ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			} else {
-				$searches[] = $wpdb->prepare( "$table_name.$col LIKE %s", $like ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				$searches[] = $wpdb->prepare( $this->prefix_field( $col ) . " LIKE %s", $like ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			}
 		}
 
@@ -505,7 +521,7 @@ class Query {
 
 		$_orderby = '';
 		if ( in_array( $orderby, $this->get_known_fields(), true ) ) {
-			$_orderby = "$table.$orderby";
+			$_orderby = $this->prefix_field( $orderby );
 		} elseif ( 'id' === strtolower( $orderby ) ) {
 			$_orderby = "$table.id";
 		} elseif ( 'include' === $orderby && ! empty( $this->query_vars['include'] ) ) {
@@ -575,6 +591,36 @@ class Query {
 		$collection = Collection::instance( $this->collection_name );
 
 		return 'names' === $return ? array_keys( $collection->get_props() ) : $collection->get_props();
+	}
+
+	/**
+	 * Prefixes a field name with the table name.
+	 *
+	 * @since 1.0.0
+	 */
+	public function prefix_field( $field ) {
+		$collection = Collection::instance( $this->collection_name );
+
+		if ( $this->is_post_field( $collection, $field ) ) {
+			$table = $GLOBALS['wpdb']->posts;
+			$field = $collection->post_map[ $field ];
+		} else {
+			$table = $collection->get_db_table_name();
+		}
+
+		return $table . '.' . $field;
+	}
+
+	/**
+	 * Checks if a given field is a post field.
+	 *
+	 * @since 1.0.0
+	 * @param Collection $collection The collection.
+	 * @param string $field The field name.
+	 * @return bool True if the field is a post field, false otherwise.
+	 */
+	public function is_post_field( $collection, $field ) {
+		return $collection->is_cpt() && isset( $collection->post_map[ $field ] );
 	}
 
 	/**

@@ -679,7 +679,7 @@ class Collection {
 	public function read( &$record ) {
 		global $wpdb;
 
-		// Fires before creating a record.
+		// Fires before reading a record.
 		do_action( $this->hook_prefix( 'before_read', true ), $record );
 
 		// Fetch post data.
@@ -703,21 +703,6 @@ class Collection {
 		// If not found, read from the db.
 		if ( false === $data ) {
 
-			$extra = array();
-
-			// Fetch post data.
-			if ( $this->is_cpt() ) {
-				$post = get_post( $record->get_id() );
-
-				if ( empty( $post ) || $this->post_type !== $post->post_type ) {
-					$this->not_found();
-				}
-
-				foreach ( $this->post_map as $key => $post_field ) {
-					$extra[ $key ] = $post->$post_field;
-				}
-			}
-
 			// Include meta data.
 			$table_name = $this->get_db_table_name();
 			$data       = $wpdb->get_row(
@@ -736,7 +721,7 @@ class Collection {
 				$this->not_found();
 			}
 
-			$data = array_merge( $data, $extra );
+			$data = array_merge( $data, $extra_data );
 
 			// Cache the record data.
 			$this->update_cache( $data );
