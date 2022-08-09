@@ -664,6 +664,7 @@ class Collection {
 			$record->apply_changes();
 
 			do_action( $this->hook_prefix( 'created' ), $record );
+			return $result;
 		}
 
 		return $this->not_saved();

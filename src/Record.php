@@ -237,9 +237,9 @@ class Record {
 			$collection = Collection::instance( $this->collection_name );
 
 			if ( $this->exists() ) {
-				$collection->update( $this );
+				call_user_func_array( array( $collection, 'update' ), array( &$this ) );
 			} else {
-				$collection->create( $this );
+				call_user_func_array( array( $collection, 'create' ), array( &$this ) );
 			}
 		} catch ( Store_Exception $e ) {
 			return new \WP_Error( $e->getErrorCode(), $e->getMessage(), $e->getErrorData() );
