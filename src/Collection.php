@@ -427,7 +427,6 @@ class Collection {
 				'type' => 'string',
 			),
 			'validate_callback' => 'rest_validate_request_arg',
-			'enum'              => array_keys( $this->props ),
 			'default'           => array_keys( $this->props ),
 		);
 
@@ -466,7 +465,7 @@ class Collection {
 
 		$query_schema['orderby']         = array(
 			'description'       => __( 'Sort collection by object attribute.', 'hizzle-store' ),
-			'type'              => array( 'object', 'array', 'string' ),
+			'type'              => 'string',
 			'default'           => 'id',
 			'items'             => array(
 				'type' => 'string',
