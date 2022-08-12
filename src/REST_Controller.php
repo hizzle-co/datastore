@@ -3,7 +3,7 @@
 namespace Hizzle\Store;
 
 /**
- * This class handles the REST API for a single collection.
+ * The rest controller for a single collection.
  *
  * @version 1.0.0
  */
@@ -11,9 +11,9 @@ namespace Hizzle\Store;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * REST API.
+ * REST_Controller API.
  */
-class REST extends \WP_REST_Controller {
+class REST_Controller extends \WP_REST_Controller {
 
 	/**
 	 * Loads the class.
