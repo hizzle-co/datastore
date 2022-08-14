@@ -662,6 +662,8 @@ class Collection {
 
 			$record->apply_changes();
 
+			$this->clear_cache( (object) $record->get_data() );
+
 			do_action( $this->hook_prefix( 'created' ), $record );
 			return $result;
 		}
