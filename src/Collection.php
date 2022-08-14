@@ -840,6 +840,8 @@ class Collection {
 		// Fires before deleting a record.
 		do_action( $this->hook_prefix( 'before_delete', true ), $record );
 
+		$this->clear_cache( (object) $record->get_data() );
+
 		// If this is a CPT, delete the post.
 		if ( $this->is_cpt() ) {
 			wp_delete_post( $record->get_id(), $delete_permanently );
