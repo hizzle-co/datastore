@@ -818,6 +818,8 @@ class Collection {
 			}
 		}
 
+		$this->clear_cache( (object) $record->get_data() );
+
 		$record->apply_changes();
 
 		do_action( $this->hook_prefix( 'updated', true ), $record );
