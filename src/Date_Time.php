@@ -76,4 +76,28 @@ class Date_Time extends \DateTime {
 		return date_i18n( $format, $timestamp );
 	}
 
+	/**
+	 * Formats a date for display or storage.
+	 *
+	 * @since  1.0.0
+	 * @param  string $context Either view, db or raw.
+	 * @return string
+	 */
+	public function context( $context = 'view' ) {
+
+		if ( 'view' === $context ) {
+			return $this->date_i18n( 'F j, Y @ g:i a' );
+		}
+
+		if ( 'view_day' === $context ) {
+			return $this->date_i18n( 'F j, Y' );
+		}
+
+		if ( 'db' === $context ) {
+			return $this->date();
+		}
+
+		return $this->__toString();
+	}
+
 }

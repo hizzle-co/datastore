@@ -48,6 +48,13 @@ class Collection {
 	public $object = null;
 
 	/**
+	 * The capabillity allowed to manage this collection.
+	 *
+	 * @var string
+	 */
+	public $capabillity = 'manage_options';
+
+	/**
 	 * In case this collection is connected to the posts table.
 	 *
 	 * @var string

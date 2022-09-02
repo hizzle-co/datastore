@@ -66,6 +66,35 @@ class Store {
 	}
 
 	/**
+	 * Inits a new store or loads an existing store.
+	 *
+	 * @param string $namespace Namespace of the store.
+	 * @param array  $collections A list of collections.
+	 * @return Store
+	 */
+	public static function init( $namespace, $collections = array() ) {
+
+		// Maybe create a new instance.
+		if ( ! isset( self::$instances[ $namespace ] ) ) {
+			return new self( $namespace, $collections );
+		}
+
+		// Update the existing instance.
+		foreach ( $collections as $key => $collection ) {
+			if ( ! $collection instanceof Collection ) {
+				$collection['name']  = $key;
+				$collections[ $key ] = new Collection( $namespace, $collection );
+			}
+
+			if ( ! isset( self::$instances[ $namespace ]->collections[ $key ] ) ) {
+				self::$instances[ $namespace ]->collections[ $key ] = $collection;
+			}
+        }
+
+		return self::$instances[ $namespace ];
+	}
+
+	/**
 	 * Retrieves a store by its namespace.
 	 *
 	 * @param string $namespace Namespace of the store.
