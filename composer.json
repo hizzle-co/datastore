@@ -1,10 +1,10 @@
 {
     "name": "hizzle/store",
-    "version": "0.0.6",
+    "version": "0.0.7",
     "type": "library",
     "description": "A standardized way of creating data stores for your projects",
     "keywords": ["wordpress","hizzle","store"],
-    "homepage": "http://github.com/picocodes/data-store/",
+    "homepage": "http://github.com/hizzle-co/datastore/",
     "license": "GPL-3.0+",
     "authors": [
         {

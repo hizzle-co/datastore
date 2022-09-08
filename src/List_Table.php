@@ -178,7 +178,7 @@ class List_Table extends \WP_List_Table {
 			}
 
 			if ( is_null( $value ) || '' === $value ) {
-				return '&mdash';
+				return '&mdash;';
 			}
 
 			if ( is_bool( $value ) ) {
