@@ -540,10 +540,14 @@ class Collection {
 	public function get_id_by_prop( $prop, $value ) {
 		global $wpdb;
 
+		if ( '' === $value ) {
+			return false;
+		}
+
 		// Try the cache.
 		$prop  = sanitize_key( $prop );
 		$value = trim( $value );
-		$id    = wp_cache_get( $value, $this->hook_prefix( 'ids_by_' . $prop ) );
+		$id    = wp_cache_get( $value, $this->hook_prefix( 'ids_by_' . $prop, true ) );
 
 		// Maybe retrieve from the db.
 		if ( false === $id ) {
@@ -556,7 +560,7 @@ class Collection {
 				$this->update_cache( $row );
 			} else {
 				$id = 0;
-				wp_cache_set( $value, $id, $this->hook_prefix( 'ids_by_' . $prop ) );
+				wp_cache_set( $value, $id, $this->hook_prefix( 'ids_by_' . $prop, true ) );
 			}
 		}
 
@@ -671,7 +675,7 @@ class Collection {
 
 			$this->clear_cache( (object) $record->get_data() );
 
-			do_action( $this->hook_prefix( 'created' ), $record );
+			do_action( $this->hook_prefix( 'created', true ), $record );
 			return $result;
 		}
 
@@ -934,7 +938,7 @@ class Collection {
 		}
 
 		foreach ( $this->get_cache_keys() as $key ) {
-			wp_cache_set( $record[ $key ], $record['id'], $this->hook_prefix( 'ids_by_' . $key ) );
+			wp_cache_set( $record[ $key ], $record['id'], $this->hook_prefix( 'ids_by_' . $key, true ) );
 		}
 
 		// Cache the entire record.
@@ -963,7 +967,7 @@ class Collection {
 	protected function not_found() {
 
 		$message = apply_filters(
-			$this->hook_prefix( 'not_found_message' ),
+			$this->hook_prefix( 'not_found_message', true ),
 			sprintf(
 				// Translators: %s is the resource type.
 				__( '%s not found.', 'hizzle-store' ),
@@ -982,7 +986,7 @@ class Collection {
 	protected function not_saved() {
 
 		$message = apply_filters(
-			$this->hook_prefix( 'not_saved_message' ),
+			$this->hook_prefix( 'not_saved_message', true ),
 			sprintf(
 				// Translators: %s is the resource type.
 				__( 'Error saving %s.', 'hizzle-store' ),

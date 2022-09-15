@@ -275,7 +275,7 @@ class List_Table extends \WP_List_Table {
 	 */
 	protected function display_notice( $code, $message ) {
 
-		$class = sanitize_html_class( $this->collection->namespace );
+		$class = sanitize_html_class( $this->collection->get_namespace() );
 
 		if ( 'success' === $code ) {
 			$class .= ' notice notice-success is-dismissible';
