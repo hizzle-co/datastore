@@ -585,7 +585,12 @@ class Collection {
 
 			// Date fields.
 			if ( $value instanceof Date_Time ) {
-				$value = $value->utc();
+
+				if ( ! empty( $this->props[ $key ] ) && 'date' === strtolower( $this->props[ $key ]->type ) ) {
+					$value = $value->utc( 'Y-m-d' );
+				} else {
+					$value = $value->utc();
+				}
 			}
 
 			// Handle arrays.

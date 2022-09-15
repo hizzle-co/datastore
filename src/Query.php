@@ -345,7 +345,7 @@ class Query {
 			if ( isset( $qv[ $key ] ) && 'any' !== $qv[ $key ] ) {
 
 				if ( is_array( $qv[ $key ] ) ) {
-					$enums              = implode( ',', array_map( 'esc_sql', $qv[ $key ] ) );
+					$enums              = "'" . implode( "','", array_map( 'esc_sql', $qv[ $key ] ) ) . "'";
 					$this->query_where .= " AND $field_name IN ($enums)";
 				} else {
 					$this->query_where .= $wpdb->prepare( " AND $field_name=$data_type", $qv[ $key ] ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
