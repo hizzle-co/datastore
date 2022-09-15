@@ -116,7 +116,7 @@ class List_Table extends \WP_List_Table {
 
 			if ( $deleted > 0 ) {
 				// translators: %d is the number of records deleted.
-				$this->errors->add( 'success', sprintf( _n( '%d record deleted.', '%d records deleted.', $deleted, 'hizzle-store' ), $deleted ) );
+				$this->errors->add( 'deleted', sprintf( _n( '%d record deleted.', '%d records deleted.', $deleted, 'hizzle-store' ), $deleted ) );
 			}
 		}
 
