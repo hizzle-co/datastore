@@ -496,7 +496,7 @@ class Record {
 
 	/**
 	 * Retrieves an array of meta data for an object.
-	 * 
+	 *
 	 * @since 1.0.0
 	 * @param string $context Context to retrieve meta data for.
 	 * @return array|string
