@@ -145,11 +145,11 @@ class List_Table extends \WP_List_Table {
 	 */
 	public function get_query_args() {
 		$args = array(
-			'paged'   => $this->get_pagenum(),
-			'number'  => $this->per_page,
-			'orderby' => isset( $_GET['orderby'] ) ? sanitize_text_field( $_GET['orderby'] ) : 'id', // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-			'order'   => isset( $_GET['order'] ) ? sanitize_text_field( $_GET['order'] ) : 'DESC', // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-			'search'  => isset( $_GET['s'] ) ? sanitize_text_field( $_GET['s'] ) : '', // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			'page'     => $this->get_pagenum(),
+			'per_page' => $this->per_page,
+			'orderby'  => isset( $_GET['orderby'] ) ? sanitize_text_field( $_GET['orderby'] ) : 'id', // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			'order'    => isset( $_GET['order'] ) ? sanitize_text_field( $_GET['order'] ) : 'DESC', // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			'search'   => isset( $_GET['s'] ) ? sanitize_text_field( $_GET['s'] ) : '', // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		);
 
 		foreach ( array_keys( $this->collection->get_props() ) as $prop ) {

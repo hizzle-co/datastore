@@ -207,11 +207,11 @@ class Query {
 		}
 
 		// limit
-		if ( isset( $qv['number'] ) && (int) $qv['number'] > 0 ) {
+		if ( isset( $qv['per_page'] ) && (int) $qv['per_page'] > 0 ) {
 			if ( $qv['offset'] ) {
-				$this->query_limit = $wpdb->prepare( 'LIMIT %d, %d', $qv['offset'], $qv['number'] );
+				$this->query_limit = $wpdb->prepare( 'LIMIT %d, %d', $qv['offset'], $qv['per_page'] );
 			} else {
-				$this->query_limit = $wpdb->prepare( 'LIMIT %d, %d', $qv['number'] * ( $qv['page'] - 1 ), $qv['number'] );
+				$this->query_limit = $wpdb->prepare( 'LIMIT %d, %d', $qv['per_page'] * ( $qv['page'] - 1 ), $qv['per_page'] );
 			}
 		}
 
@@ -576,6 +576,10 @@ class Query {
 			'fields'         => 'all',
 			'aggregate'      => false, // pass an array of property_name and function to aggregate the results.
 		);
+
+		if ( isset( $args['number'] ) ) {
+			$args['per_page'] = $args['number'];
+		}
 
 		return wp_parse_args( $args, $defaults );
 	}
