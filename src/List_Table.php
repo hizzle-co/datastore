@@ -183,10 +183,10 @@ class List_Table extends \WP_List_Table {
 
 			if ( is_bool( $value ) ) {
 				if ( $value ) {
-					return '<span class="dashicons dashicons-yes" color="green"></span>';
+					return '<span class="dashicons dashicons-yes" style="color: green"></span>';
 				}
 
-				return '<span class="dashicons dashicons-no" color="red"></span>';
+				return '<span class="dashicons dashicons-no" style="color: red"></span>';
 			}
 
 			return wp_kses_post( (string) $value );

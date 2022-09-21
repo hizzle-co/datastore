@@ -297,7 +297,40 @@ class REST_Controller extends \WP_REST_Controller {
 	 * @return WP_REST_Response|WP_Error Response object on success, or WP_Error object on failure.
 	 */
 	public function get_items( $request ) {
-		// TODO:
+
+		// Run the query.
+		try {
+
+			$collection = $this->fetch_collection();
+
+			if ( ! $collection ) {
+				return new \WP_Error( 'hizzle_rest_invalid_collection', __( 'Invalid collection.', 'hizzle-store' ), array( 'status' => 404 ) );
+			}
+
+			$args = array();
+
+			foreach ( $this->get_collection_params() as $param => $options ) {
+				if ( isset( $request[ $param ] ) ) {
+					$args[ $param ] = $request[ $param ];
+				} elseif ( isset( $options['default'] ) ) {
+					$args[ $param ] = $options['default'];
+				}
+			}
+
+			$query = $collection->query( $args );
+
+			$response = array(
+				'total'    => $query->get_total(),
+				'per_page' => $query->get( 'per_page' ),
+				'page'     => $query->get( 'page' ),
+				'items'    => array_map( array( $this, 'prepare_item_for_response' ), $query->get_results() ),
+			);
+
+			return apply_filters( 'hizzle_store_rest_get_items', rest_ensure_response( $response ), $request, $this );
+		} catch ( Store_Exception $e ) {
+			return new \WP_Error( $e->getErrorCode(), $e->getMessage(), array( 'status' => 400 ) );
+		}
+
 	}
 
 	/**
@@ -408,7 +441,22 @@ class REST_Controller extends \WP_REST_Controller {
 	 * @return WP_REST_Response|WP_Error Response object on success, or WP_Error object on failure.
 	 */
 	public function delete_item( $request ) {
-		// TODO:
+
+		try {
+
+			$collection = $this->fetch_collection();
+
+			if ( ! $collection ) {
+				return new \WP_Error( 'hizzle_rest_invalid_collection', __( 'Invalid collection.', 'hizzle-store' ), array( 'status' => 404 ) );
+			}
+
+			$record = $collection->get( (int) $request['id'] );
+			$record->delete();
+
+			return rest_ensure_response( true );
+		} catch ( Store_Exception $e ) {
+			return new \WP_Error( $e->getErrorCode(), $e->getMessage(), $e->getErrorData() );
+		}
 	}
 
 	/**

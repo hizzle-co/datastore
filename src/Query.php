@@ -147,6 +147,25 @@ class Query {
 	}
 
 	/**
+	 * Retreives a query var.
+	 *
+	 * @param string $query_var The query var to retreive.
+	 */
+	public function get( $query_var ) {
+		return isset( $this->query_vars[ $query_var ] ) ? $this->query_vars[ $query_var ] : null;
+	}
+
+	/**
+	 * Sets a query var.
+	 * 
+	 * @param string $query_var The query var to set.
+	 * @param mixed  $value The value to set.
+	 */
+	public function set( $query_var, $value ) {
+		$this->query_vars[ $query_var ] = $value;
+	}
+
+	/**
 	 * Prepare the query variables.
 	 *
 	 * Open https://yourwebsite.com/wp-json/$namespace/v1/$collection/ to see the allowed query parameters.
