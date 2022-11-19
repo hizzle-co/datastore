@@ -205,8 +205,9 @@ class Prop {
 			$string .= ' NOT NULL';
 		}
 
-		if ( $this->default || 0 === $this->default ) {
-			$string .= ' DEFAULT ' . ( is_string( $this->default ) ? '\'' . esc_sql( $this->default ) . '\'' : esc_sql( $this->default ) );
+		$default = is_bool( $this->default ) ? (int) $this->default : $this->default;
+		if ( $default || 0 === $default ) {
+			$string .= ' DEFAULT ' . ( is_string( $default  ) ? '\'' . esc_sql( $default  ) . '\'' : esc_sql( $default  ) );
 		}
 
 		if ( $this->extra ) {
