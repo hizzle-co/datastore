@@ -237,7 +237,9 @@ class Prop {
 		);
 
 		// Value type.
-		if ( $this->is_boolean() ) {
+		if ( 'metadata' === $this->name ) {
+			$schema['type'] = array( 'object', 'array' );
+		} elseif ( $this->is_boolean() ) {
 			$schema['type'] = array( 'boolean', 'int' );
 		} elseif ( $this->is_numeric() ) {
 			$schema['type'] = 'integer';
