@@ -257,7 +257,18 @@ class Record {
 	 * @return array
 	 */
 	public function get_data() {
-		return array_merge( array( 'id' => $this->get_id() ), $this->data );
+		$data = array( 'id' => $this->get_id() );
+
+		foreach ( array_keys( $this->data ) as $key ) {
+
+			if ( method_exists( $this, "get_{$key}" ) ) {
+				$data[ $key ] = $this->{"get_{$key}"}();
+			} else {
+				$data[ $key ] = $this->get_prop( $key );
+			}
+		}
+
+		return $data;
 	}
 
 	/**

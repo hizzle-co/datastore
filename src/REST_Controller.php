@@ -293,44 +293,30 @@ class REST_Controller extends \WP_REST_Controller {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param WP_REST_Request $request Full details about the request.
-	 * @return WP_REST_Response|WP_Error Response object on success, or WP_Error object on failure.
+	 * @param \WP_REST_Request $request Full details about the request.
+	 * @return \WP_REST_Response|\WP_Error Response object on success, or WP_Error object on failure.
 	 */
 	public function get_items( $request ) {
+		$collection = $this->fetch_collection();
 
-		// Run the query.
 		try {
-
-			$collection = $this->fetch_collection();
-
-			if ( ! $collection ) {
-				return new \WP_Error( 'hizzle_rest_invalid_collection', __( 'Invalid collection.', 'hizzle-store' ), array( 'status' => 404 ) );
-			}
-
-			$args = array();
-
-			foreach ( $this->get_collection_params() as $param => $options ) {
-				if ( isset( $request[ $param ] ) ) {
-					$args[ $param ] = $request[ $param ];
-				} elseif ( isset( $options['default'] ) ) {
-					$args[ $param ] = $options['default'];
-				}
-			}
-
-			$query = $collection->query( $args );
-
-			$response = array(
-				'total'    => $query->get_total(),
-				'per_page' => $query->get( 'per_page' ),
-				'page'     => $query->get( 'page' ),
-				'items'    => array_map( array( $this, 'prepare_item_for_response' ), $query->get_results() ),
-			);
-
-			return apply_filters( 'hizzle_store_rest_get_items', rest_ensure_response( $response ), $request, $this );
+			$query = $collection->query( $request->get_params() );
 		} catch ( Store_Exception $e ) {
-			return new \WP_Error( $e->getErrorCode(), $e->getMessage(), array( 'status' => 400 ) );
+			return new \WP_Error( $e->getErrorCode(), $e->getMessage(), $e->getErrorData() );
 		}
 
+		$items = array();
+
+		foreach ( $query->get_results() as $item ) {
+			$data    = $this->prepare_item_for_response( $item, $request );
+			$items[] = $this->prepare_response_for_collection( $data );
+		}
+
+		$response = rest_ensure_response( $items );
+
+		$response->header( 'X-WP-Total', (int) $query->get_total() );
+
+		return $response;
 	}
 
 	/**
@@ -373,6 +359,10 @@ class REST_Controller extends \WP_REST_Controller {
 
 		if ( is_wp_error( $object ) ) {
 			return $object;
+		}
+
+		if ( ! $object || ! $object->exists() ) {
+			return new \WP_Error( "hizzle_rest_{$this->rest_base}_create_failed", __( 'Creating resource failed.', 'hizzle-store' ), array( 'status' => 500 ) );
 		}
 
 		try {
@@ -441,22 +431,7 @@ class REST_Controller extends \WP_REST_Controller {
 	 * @return WP_REST_Response|WP_Error Response object on success, or WP_Error object on failure.
 	 */
 	public function delete_item( $request ) {
-
-		try {
-
-			$collection = $this->fetch_collection();
-
-			if ( ! $collection ) {
-				return new \WP_Error( 'hizzle_rest_invalid_collection', __( 'Invalid collection.', 'hizzle-store' ), array( 'status' => 404 ) );
-			}
-
-			$record = $collection->get( (int) $request['id'] );
-			$record->delete();
-
-			return rest_ensure_response( true );
-		} catch ( Store_Exception $e ) {
-			return new \WP_Error( $e->getErrorCode(), $e->getMessage(), $e->getErrorData() );
-		}
+		// TODO:
 	}
 
 	/**
@@ -464,11 +439,24 @@ class REST_Controller extends \WP_REST_Controller {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param WP_REST_Request $request Request object.
-	 * @return object|WP_Error The prepared item, or WP_Error object on failure.
+	 * @param  \WP_REST_Request $request Request object.
+	 * @param  bool            $creating If is creating a new object.
+	 * @return Record|\WP_Error The prepared item, or WP_Error object on failure.
 	 */
-	protected function prepare_item_for_database( $request ) {
-		// TODO:
+	protected function prepare_item_for_database( $request, $creating = false ) {
+		$record = $this->get_object( $creating ? 0 : (int) $request['id'] );
+
+		if ( is_wp_error( $record ) ) {
+			return $record;
+		}
+
+		foreach ( array_keys( $this->get_endpoint_args_for_item_schema( \WP_REST_Server::CREATABLE ) ) as $arg ) {
+			if ( isset( $request[ $arg ] ) ) {
+				$record->set( $arg, $request[ $arg ] );
+			}
+		}
+
+		return $record;
 	}
 
 	/**
@@ -476,12 +464,37 @@ class REST_Controller extends \WP_REST_Controller {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param mixed           $item    WordPress representation of the item.
-	 * @param WP_REST_Request $request Request object.
-	 * @return WP_REST_Response|WP_Error Response object on success, or WP_Error object on failure.
+	 * @param Record           $item    WordPress representation of the item.
+	 * @param \WP_REST_Request $request Request object.
+	 * @return \WP_REST_Response|WP_Error Response object on success, or WP_Error object on failure.
 	 */
 	public function prepare_item_for_response( $item, $request ) {
-		// TODO:
+		$fields = $this->get_fields_for_response( $request );
+		$data   = array();
+
+		foreach ( $item->get_data() as $key => $value ) {
+			if ( rest_is_field_included( $key, $fields ) ) {
+				$data[ $key ] = $value;
+			}
+		}
+
+		$context = ! empty( $request['context'] ) ? $request['context'] : 'view';
+		$data    = $this->add_additional_fields_to_object( $data, $request );
+		$data    = $this->filter_response_by_context( $data, $context );
+
+		// Wrap the data in a response object.
+		$response = rest_ensure_response( $data );
+
+		if ( rest_is_field_included( '_links', $fields ) ) {
+			$links = $this->prepare_links( $item, $request );
+			$response->add_links( $links );
+		}
+
+		/**
+		 * Filters the data for a REST API response.
+		 *
+		 */
+		return apply_filters( "hizzle_store_rest_prepare_{$this->namespace}_{$this->rest_base}", $response, $item, $request );
 	}
 
 	/**
