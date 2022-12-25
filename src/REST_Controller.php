@@ -465,6 +465,24 @@ class REST_Controller extends \WP_REST_Controller {
 
 		foreach ( array_keys( $this->get_endpoint_args_for_item_schema( \WP_REST_Server::CREATABLE ) ) as $arg ) {
 			if ( isset( $request[ $arg ] ) ) {
+
+				// Special handling for metadata.
+				if ( 'metadata' === $arg ) {
+
+					$metadata = is_array( $request[ $arg ] ) ? $request[ $arg ] : array();
+
+					foreach ( $metadata as $key => $value ) {
+
+						if ( '' === $value ) {
+							$record->remove_meta( $key );
+						} else {
+							$record->update_meta( $key, $value );
+						}
+					}
+
+					continue;
+				}
+
 				$record->set( $arg, $request[ $arg ] );
 			}
 		}
