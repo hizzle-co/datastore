@@ -382,7 +382,7 @@ class REST_Controller extends \WP_REST_Controller {
 			$this->update_additional_fields_for_object( $object, $request );
 
 			// Fires after a single object is created or updated via the REST API.
-			do_action( "hizzle_rest_insert_{$this->rest_base}_object", $object, $request, true );
+			do_action( 'hizzle_rest_insert_object_' . $this->get_normalized_rest_base(), $object, $request, true );
 		} catch ( Store_Exception $e ) {
 			$object->delete();
 			return new \WP_Error( $e->getErrorCode(), $e->getMessage(), $e->getErrorData() );
@@ -424,7 +424,7 @@ class REST_Controller extends \WP_REST_Controller {
 			$this->update_additional_fields_for_object( $object, $request );
 
 			// Fires after a single object is created or updated via the REST API.
-			do_action( "hizzle_rest_insert_{$this->post_type}_object", $object, $request, false );
+			do_action( 'hizzle_rest_insert_object_' . $this->get_normalized_rest_base(), $object, $request, false );
 		} catch ( Store_Exception $e ) {
 			return new \WP_Error( $e->getErrorCode(), $e->getMessage(), $e->getErrorData() );
 		}
@@ -679,7 +679,7 @@ class REST_Controller extends \WP_REST_Controller {
 			}
 		}
 
-		do_action( 'hizzle_rest_batch_items', $response, $this->get_normalized_rest_base(), $request );
+		do_action( 'hizzle_rest_batch_items_' . $this->get_normalized_rest_base(), $request, $response );
 
 		return rest_ensure_response( $response );
 	}
@@ -731,6 +731,6 @@ class REST_Controller extends \WP_REST_Controller {
 	 * @return string
 	 */
 	protected function get_normalized_rest_base() {
-		return preg_replace( '/\(.*\)\//i', '', $this->rest_base );
+		return preg_replace( '/\(.*\)\//i', '', trim( $this->namespace, '/v1' ) . '_' . $this->rest_base );
 	}
 }
