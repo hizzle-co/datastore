@@ -679,6 +679,8 @@ class REST_Controller extends \WP_REST_Controller {
 			}
 		}
 
+		do_action( 'hizzle_rest_batch_items', $response, $this->get_normalized_rest_base(), $request );
+
 		return rest_ensure_response( $response );
 	}
 
