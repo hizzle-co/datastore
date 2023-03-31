@@ -28,6 +28,11 @@ class Record {
 	protected $id = 0;
 
 	/**
+	 * Returns an ID to create the record with.
+	 */
+	public $create_with_id = 0;
+
+	/**
 	 * Core data for this object. Name value pairs (name + default value).
 	 *
 	 * @since 1.0.0

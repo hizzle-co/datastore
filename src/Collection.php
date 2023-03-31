@@ -644,6 +644,10 @@ class Collection {
 
 			$fields['id'] = $post_id;
 			$formats[]    = '%d';
+		} else if ( ! empty( $record->create_with_id ) ) {
+			$fields['id'] = (int) $record->create_with_id;
+			$formats[]    = '%d';
+			$record->set_id( (int) $record->create_with_id );
 		}
 
 		// Save meta data.
