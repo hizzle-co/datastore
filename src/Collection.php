@@ -644,7 +644,7 @@ class Collection {
 
 			$fields['id'] = $post_id;
 			$formats[]    = '%d';
-		} else if ( ! empty( $record->create_with_id ) ) {
+		} elseif ( ! empty( $record->create_with_id ) ) {
 			$fields['id'] = (int) $record->create_with_id;
 			$formats[]    = '%d';
 			$record->set_id( (int) $record->create_with_id );
@@ -888,6 +888,15 @@ class Collection {
 		global $wpdb;
 
 		return $wpdb->delete( $this->get_db_table_name(), $where );
+	}
+
+	/**
+	 * Deletes all objects.
+	 */
+	public function delete_all() {
+		global $wpdb;
+
+		$wpdb->query( "TRUNCATE TABLE {$this->get_db_table_name()}" );
 	}
 
 	/**
