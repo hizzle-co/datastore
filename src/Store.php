@@ -87,7 +87,7 @@ class Store {
 			}
 
 			if ( ! isset( self::$instances[ $namespace ]->collections[ $key ] ) ) {
-				self::$instances[ $namespace ]->collections[ $key ] = $collection;
+				self::$instances[ $namespace ]->collections[ $key ] = $collections[ $key ];
 			}
         }
 
