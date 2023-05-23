@@ -162,6 +162,21 @@ class List_Table extends \WP_List_Table {
 	}
 
 	/**
+	 * Generates content for a single row of the table
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param Record $item The current item.
+	 */
+	public function single_row( $item ) {
+
+		echo '<tr data-id="' . esc_attr( $item->get_id() ) . '">';
+		$this->single_row_columns( $item );
+		echo '</tr>';
+
+	}
+
+	/**
 	 * Displays a column.
 	 *
 	 * @param Record $item        item.
