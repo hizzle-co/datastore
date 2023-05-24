@@ -209,14 +209,18 @@ class REST_Controller extends \WP_REST_Controller {
 					'args'                => array_merge(
 						$this->get_collection_params(),
 						array(
-							'aggregate' => array(
+							'aggregate'    => array(
 								'type'        => array( 'object' ),
 								'description' => __( 'column => function array of columns to aggregate.', 'hizzle-store' ),
 								'required'    => true,
 							),
-							'groupby'   => array(
+							'groupby'      => array(
 								'type'        => array( 'string', 'array' ),
 								'description' => __( 'Optional. Columns to group results by.', 'hizzle-store' ),
+							),
+							'extra_fields' => array(
+								'type'        => array( 'string', 'array' ),
+								'description' => __( 'Optional. Extra fields to include in the response.', 'hizzle-store' ),
 							),
 						)
 					),
