@@ -462,6 +462,11 @@ class Record {
 		// Sanitize the value.
 		$value = $object->sanitize( $value );
 
+		// Limit length.
+		if ( is_string( $value ) && is_int( $object->length ) ) {
+			$value = $this->limit_length( $value, $object->length );
+		}
+
 		// Set the value.
 		if ( true === $this->object_read ) {
 			if ( $value !== $this->data[ $prop ] || array_key_exists( $prop, $this->changes ) ) {
@@ -676,6 +681,34 @@ class Record {
 		}
 
 		return $default;
+	}
+
+	/**
+	 * Limit length of a string.
+	 *
+	 * @param  string  $string string to limit.
+	 * @param  integer $limit Limit size in characters.
+	 * @return string
+	 */
+	protected function limit_length( $string, $limit ) {
+
+		if ( empty( $limit ) || empty( $string ) || ! is_string( $string ) ) {
+			return $string;
+		}
+
+		$str_limit = $limit - 3;
+
+		if ( function_exists( 'mb_strimwidth' ) ) {
+			if ( mb_strlen( $string, 'UTF-8' ) > $limit ) {
+				$string = mb_strimwidth( $string, 0, $str_limit ) . '...';
+			}
+		} else {
+			if ( strlen( $string ) > $limit ) {
+				$string = substr( $string, 0, $str_limit ) . '...';
+			}
+		}
+		return $string;
+
 	}
 
 }
