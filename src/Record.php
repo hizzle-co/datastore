@@ -325,6 +325,31 @@ class Record {
 		$from = is_bool( $transition['from'] ) ? ( $transition['from'] ? 'yes' : 'no' ) : $transition['from'];
 		$to   = is_bool( $transition['to'] ) ? ( $transition['to'] ? 'yes' : 'no' ) : $transition['to'];
 
+		// Props that accept multiple values.
+		if ( is_array( $from ) || is_array( $to ) ) {
+			$from    = is_array( $from ) ? $from : array();
+			$to      = is_array( $to ) ? $to : array();
+			$added   = array_diff( $to, $from );
+			$removed = array_diff( $from, $to );
+
+			// Fire hooks for the added values.
+			foreach ( $added as $value ) {
+				do_action( "{$this->object_type}_added_to_{$prop}", $this, $value );
+			}
+
+			// Fire hooks for the removed values.
+			foreach ( $removed as $value ) {
+				do_action( "{$this->object_type}_removed_from_{$prop}", $this, $value );
+			}
+
+			// Fire hook if the prop is changed.
+			if ( ! empty( $added ) || ! empty( $removed ) ) {
+				do_action( "{$this->object_type}_{$prop}_changed", $this, $from, $to );
+			}
+
+			return;
+		}
+
 		// Fire a hook for the enum change.
 		do_action( "{$this->object_type}_{$prop}_set_to_{$to}", $this, $from );
 
@@ -478,7 +503,7 @@ class Record {
 			}
 
 			// If this is an enum or boolean, record the change.
-			if ( $object->is_boolean() || ! empty( $object->enum ) ) {
+			if ( $object->is_boolean() || $object->is_tokens || ! empty( $object->enum ) ) {
 
 				if ( ! $this->exists() || $value !== $this->data[ $prop ] ) {
 					$this->enum_transition[ $prop ] = array(
@@ -501,6 +526,21 @@ class Record {
 	 */
 	public function set( $prop, $value ) {
 
+		// Check if prop ends 
+		$is_adding   = false;
+		$is_removing = false;
+		if ( is_string( $prop ) && $this->get_object_read() ) {
+
+			// Check if prop ends with add.
+			if ( '::add' === substr( $prop, -5 ) ) {
+				$is_adding = true;
+				$prop      = substr( $prop, 0, -5 );
+			} elseif ( '::remove' === substr( $prop, -8 ) ) {
+				$is_removing = true;
+				$prop        = substr( $prop, 0, -8 );
+			}
+		}
+
 		$prop = is_string( $prop ) ? $this->has_prop( $prop ) : $prop;
 
 		if ( empty( $prop ) ) {
@@ -512,13 +552,19 @@ class Record {
 
 		// Check if we have a setter method.
 		if ( method_exists( $this, $method ) ) {
-			return $this->{$method}( $value );
+			return $this->{$method}( $value, $is_adding, $is_removing );
 		}
 
-		if ( $prop->is_meta_key && $prop->is_meta_key_multiple && ! is_array( $value ) ) {
+		if ( $prop->is_meta_key && $prop->is_meta_key_multiple ) {
+			$value    = noptin_parse_list( $value, true );
 			$existing = $this->get( $prop );
 			$existing = is_array( $existing ) ? $existing : array();
-			$value    = array_merge( $existing, array( $value ) );
+
+			if ( $is_adding ) {
+				$value = array_unique( array_merge( $existing, $value ) );
+			} elseif ( $is_removing ) {
+				$value = array_unique( array_diff( $existing, $value ) );
+			}
 		}
 
 		// Set directly to the data if we have it.
@@ -538,22 +584,24 @@ class Record {
 	 * @return mixed
 	 */
 	public function get( $prop, $context = 'view' ) {
-		$prop = is_string( $prop ) ? $this->has_prop( $prop ) : $prop;
 
-		if ( empty( $prop ) ) {
+		if ( is_object( $prop ) ) {
+			$prop = $prop->name;
+		}
+
+		if ( empty( $prop ) || ! is_string( $prop ) ) {
 			return null;
 		}
 
-		$key    = $prop->name;
-		$method = "get_$key";
+		$method = "get_$prop";
 
 		// Check if we have a getter method.
 		if ( method_exists( $this, $method ) ) {
 			return $this->{$method}( $context );
 		}
 
-		// Read directly from the data if we have it.
-		return $this->get_prop( $prop, $context );
+		// Force "view" to allow filtering third party props.
+		return $this->get_prop( $prop, 'view' );
 	}
 
 	/**
@@ -770,7 +818,7 @@ class Record {
 	 * @param \Hizzle\Store\Date_Time $date date.
 	 * @param string $type type.
 	 */
-	protected function display_date_value( $date, $type ) {
+	public function display_date_value( $date, $type ) {
 
 		if ( 'date' === $type ) {
 			return esc_html( $date->context( 'view_day' ) );
@@ -810,4 +858,13 @@ class Record {
 		return '<abbr title="' . esc_attr( $date->__toString() ) . '">' . esc_html( $date->context( 'view_day' ) ) . '</abbr>';
 	}
 
+	/**
+	 * Returns the record's overview.
+	 *
+	 * @since 1.0.0
+	 * @return array
+	 */
+	public function get_overview() {
+		return array();
+	}
 }

@@ -47,7 +47,7 @@ class List_Table extends \WP_List_Table {
 	 * @var   int
 	 * @since 1.0.0
 	 */
-	public $per_page = 20;
+	public $per_page = 25;
 
 	/**
 	 * Errors
@@ -73,7 +73,7 @@ class List_Table extends \WP_List_Table {
 
 		$this->errors     = new \WP_Error();
 		$this->collection = $collection;
-		$this->per_page   = $this->get_items_per_page( $collection->hook_prefix( 'per_page' ), 20 );
+		$this->per_page   = $this->get_items_per_page( $collection->hook_prefix( 'per_page' ), 25 );
 
 		$this->process_bulk_action();
 
@@ -325,7 +325,7 @@ class List_Table extends \WP_List_Table {
 		$args = array();
 		foreach ( array_keys( $filters ) as $prop ) {
 			if ( isset( $_GET[ $prop ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-				$args[ $prop ] = map_deep( urldecode_deep( $_GET[ $prop ] ), 'sanitize_text_field' ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				$args[ $prop ] = map_deep( urlencode_deep( $_GET[ $prop ] ), 'sanitize_text_field' ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			} else {
 				$args[ $prop ] = '';
 			}

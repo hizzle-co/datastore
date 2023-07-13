@@ -34,6 +34,13 @@ class Prop {
 	public $name;
 
 	/**
+	 * The prop label.
+	 *
+	 * @var string
+	 */
+	public $label;
+
+	/**
 	 * The prop description.
 	 *
 	 * @var string
@@ -125,6 +132,13 @@ class Prop {
 	public $readonly = false;
 
 	/**
+	 * Whether the prop is saved as a token.
+	 *
+	 * @var bool
+	 */
+	public $is_tokens = false;
+
+	/**
 	 * Whether the prop is saved as a meta key.
 	 *
 	 * @var bool
@@ -158,6 +172,10 @@ class Prop {
 			if ( property_exists( $this, $key ) ) {
 				$this->$key = $value;
 			}
+		}
+
+		if ( empty( $this->label ) ) {
+			$this->label = ucfirst( str_replace( '_', ' ', $this->name ) );
 		}
 	}
 
@@ -273,6 +291,8 @@ class Prop {
 		// Value type.
 		if ( 'metadata' === $this->name ) {
 			$schema['type'] = array( 'object', 'array' );
+		} elseif( $this->is_meta_key ) {
+			$schema['type'] = $this->is_meta_key_multiple ? 'array' : 'string';
 		} elseif ( $this->is_boolean() ) {
 			$schema['type'] = array( 'boolean', 'int' );
 		} elseif ( $this->is_numeric() ) {
@@ -316,7 +336,7 @@ class Prop {
 
 		// Default value.
 		if ( null !== $this->default ) {
-			$schema['default'] = $this->default;
+			$schema['default'] = $this->is_boolean() ? (bool) $this->default : $this->default;
 		}
 
 		// Extra REST schema.
@@ -355,10 +375,7 @@ class Prop {
 				__( 'Limit response to resources where %s has the provided value.', 'hizzle-store' ),
 				$this->name
 			),
-			'type'              => array_merge( array( 'array' ), (array) $rest_schema['type'] ),
-			'items'             => array(
-				'type' => $rest_schema['type'],
-			),
+			'type'              => array_unique( array_merge( (array) $rest_schema['type'], array( 'array' ) ) ),
 			'validate_callback' => 'rest_validate_request_arg',
 		);
 
@@ -373,10 +390,7 @@ class Prop {
 				__( 'Limit response to resources where %s does not have the provided value.', 'hizzle-store' ),
 				$this->name
 			),
-			'type'              => array_merge( array( 'array' ), (array) $rest_schema['type'] ),
-			'items'             => array(
-				'type' => $rest_schema['type'],
-			),
+			'type'              => array_unique( array_merge( (array) $rest_schema['type'], array( 'array' ) ) ),
 			'validate_callback' => 'rest_validate_request_arg',
 		);
 
@@ -390,22 +404,20 @@ class Prop {
 			$query_schema[ "{$this->name}_before" ] = array(
 				'description'       => sprintf(
 					// translators: Placeholder %s is the property name.
-					__( 'Limit response to resources where %s is before a given ISO8601 compliant date.', 'hizzle-store' ),
+					__( 'Limit response to resources where %s is before a given strtotime compatible date.', 'hizzle-store' ),
 					$this->name
 				),
 				'type'              => 'string',
-				'format'            => 'date-time',
 				'validate_callback' => 'rest_validate_request_arg',
 			);
 
 			$query_schema[ "{$this->name}_after" ] = array(
 				'description'       => sprintf(
 					// translators: Placeholder %s is the property name.
-					__( 'Limit response to resources where %s is after a given ISO8601 compliant date.', 'hizzle-store' ),
+					__( 'Limit response to resources where %s is after a given strtotime compatible date.', 'hizzle-store' ),
 					$this->name
 				),
 				'type'              => 'string',
-				'format'            => 'date-time',
 				'validate_callback' => 'rest_validate_request_arg',
 			);
 
@@ -512,6 +524,11 @@ class Prop {
 	 */
 	public function sanitize( $value ) {
 
+		// Abort if value is null.
+		if ( null === $value ) {
+			return $value;
+		}
+
 		// Do we have a custom callback?
 		if ( ! empty( $this->sanitize_callback ) ) {
 			return call_user_func( $this->sanitize_callback, $value );
@@ -547,7 +564,12 @@ class Prop {
 			return gmdate( 'Y-m-d H:i:s', strtotime( $value ) );
 		}
 
-		return sanitize_text_field( $value );
+		// Var chars.
+		if ( 'varchar' === strtolower( $this->type ) ) {
+			return sanitize_text_field( $value );
+		}
+
+		return sanitize_textarea_field( $value );
 	}
 
 	/**

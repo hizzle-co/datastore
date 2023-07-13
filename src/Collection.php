@@ -119,6 +119,13 @@ class Collection {
 	protected $query_schema;
 
 	/**
+	 * The collection labels.
+	 *
+	 * @var array
+	 */
+	public $labels = array();
+
+	/**
 	 * A list of class instances
 	 *
 	 * @var Collection[]
@@ -154,7 +161,7 @@ class Collection {
 
 		// Register our custom meta table.
 		if ( $this->create_meta_table() ) {
-			$meta_type          = $this->get_meta_type() . 'meta';
+			$meta_type          = $this->get_meta_type() . '_meta';
 			$wpdb->{$meta_type} = $wpdb->prefix . $meta_type;
 		}
 
@@ -267,13 +274,13 @@ class Collection {
 			return $wpdb->postmeta;
 		}
 
-		return $wpdb->prefix . $this->get_meta_type() . 'meta';
+		return $wpdb->prefix . $this->get_meta_type() . '_meta';
 	}
 
 	/**
 	 * Checks if we should create a custom meta table.
 	 *
-	 * @return string
+	 * @return bool
 	 */
 	public function create_meta_table() {
 		return $this->use_meta_table && ! $this->is_cpt();
@@ -524,6 +531,28 @@ class Collection {
 		// Add each prop.
 		foreach ( $this->props as $prop ) {
 			$schema['properties'][ $prop->name ] = $prop->get_rest_schema();
+
+			if ( $prop->is_meta_key && $prop->is_meta_key_multiple ) {
+				$schema['properties'][ $prop->name . '::add' ] = array(
+					'description' => sprintf(
+						/* translators: %s: field label */
+						__( 'Add %s', 'hizzle-store' ),
+						strtolower( $prop->description )
+					),
+					'type'        => 'array',
+					'context'     => array( 'edit' ),
+				);
+
+				$schema['properties'][ $prop->name . '::remove' ] = array(
+					'description' => sprintf(
+						/* translators: %s: field label */
+						__( 'Remove %s', 'hizzle-store' ),
+						strtolower( $prop->description )
+					),
+					'type'        => 'array',
+					'context'     => array( 'edit' ),
+				);
+			}
 		}
 
 		$schema['properties'][ $prop->name ] = array_filter( $schema['properties'][ $prop->name ] );
@@ -546,20 +575,16 @@ class Collection {
 
 		$query_schema = array();
 
-		$query_schema['page'] = array(
-			'description'       => __( 'Current page of the collection.', 'hizzle-store' ),
-			'type'              => 'integer',
-			'default'           => 1,
-			'sanitize_callback' => 'absint',
-			'validate_callback' => 'rest_validate_request_arg',
-			'minimum'           => 1,
+		$query_schema['paged'] = array(
+			'description' => __( 'Current page of the collection.', 'hizzle-store' ),
+			'type'        => 'integer',
 		);
 
 		$query_schema['per_page'] = array(
 			'description'       => __( 'Maximum number of items to be returned in result set.', 'hizzle-store' ),
 			'type'              => 'integer',
-			'default'           => 10,
-			'minimum'           => 1,
+			'default'           => 25,
+			'minimum'           => -1,
 			'maximum'           => 100,
 			'sanitize_callback' => 'absint',
 			'validate_callback' => 'rest_validate_request_arg',
@@ -601,7 +626,7 @@ class Collection {
 
 		$query_schema['include'] = array(
 			'description'       => __( 'Limit result set to specific ids.', 'hizzle-store' ),
-			'type'              => 'array',
+			'type'              => array( 'array' ),
 			'items'             => array(
 				'type' => 'integer',
 			),
@@ -611,7 +636,9 @@ class Collection {
 
 		// Add each prop.
 		foreach ( $this->props as $prop ) {
-			$query_schema = array_merge( $query_schema, $prop->get_query_schema() );
+			if ( 'id' !== $prop->name ) {
+				$query_schema = array_merge( $query_schema, $prop->get_query_schema() );
+			}
 		}
 
 		$query_schema['order']           = array(
@@ -724,7 +751,8 @@ class Collection {
 	 * @return array
 	 */
 	protected function prepare_data( $data ) {
-		$prepared = array();
+		$prepared     = array();
+		$known_fields = $this->get_known_fields();
 
 		foreach ( $data as $key => $value ) {
 
@@ -743,8 +771,10 @@ class Collection {
 				}
 			}
 
-			// Handle arrays.
-			$value = maybe_serialize( $value );
+			// Handle arrays, except for meta keys.
+			if ( ! in_array( $key, $known_fields['meta'], true ) ) {
+				$value = maybe_serialize( $value );
+			}
 
 			$prepared[ $key ] = $value;
 		}
@@ -875,7 +905,7 @@ class Collection {
 			array( '%d' )
 		);
 
-		return $result ? $record->get_id() : 0;
+		return $record->get_id();
 	}
 
 	/**
@@ -1155,7 +1185,7 @@ class Collection {
 
 		// Update meta data.
 		// Save date modified in UTC time.
-		if ( ! $this->is_cpt() && isset( $this->props['date_modified'] ) ) {
+		if ( ! empty( $changes ) && ! $this->is_cpt() && isset( $this->props['date_modified'] ) ) {
 			$changes['date_modified'] = new Date_Time( 'now', new \DateTimeZone( 'UTC' ) );
 			$record->set( 'date_modified', $changes['date_modified'] );
 		}
@@ -1234,13 +1264,27 @@ class Collection {
 	 * @return int|false — The number of rows updated, or false on error.
 	 */
 	public function delete_where( $where ) {
+		global $wpdb;
 
 		// Fetch matching records.
-		$records = $this->query( $where );
+		$query = $this->query( $where );
 
 		// Delete each record individually.
-		foreach ( $records as $record ) {
+		foreach ( $query->get_results() as $record ) {
 			$record->delete();
+		}
+
+		// Truncase the tables if there are no more records.
+		$main_table = esc_sql( $this->get_db_table_name() );
+		$has_record = $wpdb->get_var( "SELECT id FROM $main_table LIMIT 1" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		if ( ! $has_record ) {
+			$wpdb->query( "TRUNCATE TABLE $main_table" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+			if ( $this->create_meta_table() ) {
+				$meta_table = $this->get_meta_table_name();
+				$wpdb->query( "TRUNCATE TABLE $meta_table" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			}
 		}
 
 		return true;
@@ -1250,26 +1294,7 @@ class Collection {
 	 * Deletes all objects.
 	 */
 	public function delete_all() {
-		global $wpdb;
-
-		// Fetch all records.
-		$records = $this->query( array() );
-
-		// Delete each record individually.
-		foreach ( $records as $record ) {
-			$record->delete();
-		}
-
-		// Reset auto increment.
-		$main_table = esc_sql( $this->get_db_table_name() );
-		$wpdb->query( "TRUNCATE TABLE $main_table" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-
-		if ( $this->use_meta_table ) {
-			$meta_table = $this->get_meta_table_name();
-			$wpdb->query( "TRUNCATE TABLE $meta_table" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		}
-
-		return true;
+		return $this->delete_where( array() );
 	}
 
 	/**
@@ -1325,15 +1350,58 @@ class Collection {
 	 * @since   1.0.0
 	 */
 	public function delete_all_record_meta( $record_id ) {
-		$all_meta = $this->get_record_meta( $record_id );
+		$all_meta = array_keys( $this->get_record_meta( $record_id ) );
 
-		foreach ( $all_meta as $meta_key => $meta_value ) {
+		foreach ( $all_meta as $meta_key ) {
 			$this->delete_record_meta( $record_id, $meta_key );
 		}
 	}
 
 	/**
-	 * Determines if a meta field with the given key exists for the given noptin record ID.
+	 * Deletes all record meta fields for the given meta key.
+	 *
+	 * This function selects all records with the given meta key, then deletes the meta key.
+	 * It would be faster to delete the meta key directly, but this function ensures that
+	 * caches are cleared for each record.
+	 *
+	 * @param   string $meta_key  Meta key.
+	 * @access  public
+	 */
+	public function delete_all_meta( $meta_key ) {
+		global $wpdb;
+
+		$meta_table = $this->get_meta_table_name();
+
+		// Select all records with the given meta key.
+		$id_col     = $this->get_meta_type() . '_id';
+		$record_ids = $wpdb->get_col( $wpdb->prepare( "SELECT $id_col FROM $meta_table WHERE meta_key = %s", $meta_key ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		// Delete all meta for each record.
+		foreach ( $record_ids as $record_id ) {
+			$this->delete_record_meta( $record_id, $meta_key );
+		}
+	
+		return true;
+	}
+
+	/**
+	 * Fetches all record meta values for the given meta key.
+	 *
+	 * @param   string $meta_key  Meta key.
+	 * @access  public
+	 */
+	public function get_all_meta( $meta_key ) {
+		global $wpdb;
+
+		$meta_table = $this->get_meta_table_name();
+
+		return $wpdb->get_col(
+			$wpdb->prepare( "SELECT DISTINCT meta_value FROM $meta_table WHERE meta_key = %s", $meta_key ) // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		);
+	}
+
+	/**
+	 * Determines if a meta field with the given key exists for the given record ID.
 	 *
 	 * @param int    $record_id  ID of the record metadata is for.
 	 * @param string $meta_key       Metadata key.
@@ -1419,11 +1487,11 @@ class Collection {
 		}
 
 		foreach ( $this->get_cache_keys() as $key ) {
-			wp_cache_set( $record[ $key ], $record['id'], $this->hook_prefix( 'ids_by_' . $key, true ) );
+			wp_cache_set( $record[ $key ], $record['id'], $this->hook_prefix( 'ids_by_' . $key, true ), WEEK_IN_SECONDS );
 		}
 
 		// Cache the entire record.
-		wp_cache_set( $record['id'], $record, $this->get_full_name() );
+		wp_cache_set( $record['id'], $record, $this->get_full_name(), DAY_IN_SECONDS );
 	}
 
 	/**
@@ -1467,17 +1535,30 @@ class Collection {
 	 * @throws Store_Exception
 	 */
 	protected function not_saved() {
+		global $wpdb;
 
-		$message = apply_filters(
+		// Fetch last db error.
+		$db_error = $wpdb->last_error;
+		$message  = apply_filters(
 			$this->hook_prefix( 'not_saved_message', true ),
 			sprintf(
 				// Translators: %s is the resource type.
-				__( 'Error saving %s.', 'hizzle-store' ),
-				$this->get_singular_name()
+				__( 'Error saving %s: %s.', 'hizzle-store' ),
+				$this->get_singular_name(),
+				empty( $db_error ) ? __( 'Unknown error', 'hizzle-store' ) : $db_error
 			)
 		);
 
 		throw new Store_Exception( $this->hook_prefix( 'not_saved', true ), $message, 404 );
 	}
 
+	/**
+	 * Retrieves a label.
+	 *
+	 * @param string $key The label key.
+	 * @param string $default The default label.
+	 */
+	public function get_label( $key, $default ) {
+		return isset( $this->labels[ $key ] ) ? $this->labels[ $key ] : $default;
+	}
 }
