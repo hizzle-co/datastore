@@ -992,8 +992,8 @@ class Collection {
 			if ( $prop->is_meta_key_multiple ) {
 
 				$new       = (array) $new;
-				$to_delete = array_diff_key( $current, $new );
-				$to_create = array_diff_key( $new, $current );
+				$to_delete = array_diff( $current, $new );
+				$to_create = array_diff( $new, $current );
 
 				// Add new meta.
 				foreach ( $to_create as $value ) {
@@ -1385,7 +1385,7 @@ class Collection {
 		foreach ( $record_ids as $record_id ) {
 			$this->delete_record_meta( $record_id, $meta_key );
 		}
-	
+
 		return true;
 	}
 
@@ -1527,7 +1527,7 @@ class Collection {
 			sprintf(
 				// Translators: %s is the resource type.
 				__( '%s not found.', 'hizzle-store' ),
-				$this->get_singular_name()
+				$this->get_label( 'singular_name', $this->get_singular_name() )
 			)
 		);
 
@@ -1548,8 +1548,8 @@ class Collection {
 			$this->hook_prefix( 'not_saved_message', true ),
 			sprintf(
 				// Translators: %s is the resource type.
-				__( 'Error saving %s: %s.', 'hizzle-store' ),
-				$this->get_singular_name(),
+				__( 'Error saving %1$s: %2$s.', 'hizzle-store' ),
+				$this->get_label( 'singular_name', $this->get_singular_name() ),
 				empty( $db_error ) ? __( 'Unknown error', 'hizzle-store' ) : $db_error
 			)
 		);

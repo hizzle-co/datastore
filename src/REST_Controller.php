@@ -244,7 +244,7 @@ class REST_Controller extends \WP_REST_Controller {
 				)
 			);
 		}
-	
+
 		// METHOD to deal with batch operations.
 		register_rest_route(
 			$this->namespace,
@@ -530,9 +530,11 @@ class REST_Controller extends \WP_REST_Controller {
 					'items'   => $items,
 					'summary' => (object) array(
 						'total' => array(
-							'label' => $collection->get_label( 'name', $collection->get_name() ),
-							'value' => $query->get_total(),	
-						)
+							'label' => $query->get_total() === 1 ?
+								$collection->get_label( 'singular_name', $collection->get_singular_name() )
+								: $collection->get_label( 'name', $collection->get_name() ),
+							'value' => $query->get_total(),
+						),
 					),
 					'total'   => $query->get_total(),
 				),
@@ -780,6 +782,11 @@ class REST_Controller extends \WP_REST_Controller {
 				// If value is a date, convert it to the ISO8601 format.
 				if ( $value instanceof Date_Time ) {
 					$value = $value->format( 'Y-m-d\TH:i:sP' );
+
+					// If value contains 00:00:00, remove the time.
+					if ( false !== strpos( $value, '00:00:00' ) ) {
+						$value = substr( $value, 0, 10 );
+					}
 				}
 
 				// Normalize values when exporting.
@@ -934,7 +941,7 @@ class REST_Controller extends \WP_REST_Controller {
 				foreach ( $query->get_results() as $item ) {
 					$items['update'][] = array_merge(
 						$merge,
-						array( 'id' => $item->get_id() ),
+						array( 'id' => $item->get_id() )
 					);
 				}
 			} catch ( Store_Exception $e ) {}
@@ -972,7 +979,7 @@ class REST_Controller extends \WP_REST_Controller {
 							'data'    => $response->get_error_data(),
 						),
 					);
-				} else if ( ! $skip_data ) {
+				} elseif ( ! $skip_data ) {
 					$responses[ $action ][] = array(
 						'is_error' => false,
 						'data'     => $wp_rest_server->response_to_data( $response, '' ),
@@ -1239,7 +1246,7 @@ class REST_Controller extends \WP_REST_Controller {
 			// If we have an email, set as default.
 			if ( isset( $schema['email'] ) ) {
 				$default = 'email';
-			} elseif( isset( $schema['name'] ) ) {
+			} elseif ( isset( $schema['name'] ) ) {
 				$default = 'name';
 			}
 
