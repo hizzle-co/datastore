@@ -569,7 +569,7 @@ class Prop {
 			return sanitize_text_field( $value );
 		}
 
-		return sanitize_textarea_field( $value );
+		return wp_kses_post( $value );
 	}
 
 	/**
