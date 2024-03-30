@@ -45,7 +45,7 @@ class Collection {
 	 *
 	 * @var bool
 	 */
-	protected $use_meta_table = false;
+	public $use_meta_table = false;
 
 	/**
 	 * CRUD class. Should extend Record.
