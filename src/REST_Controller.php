@@ -645,7 +645,7 @@ class REST_Controller extends \WP_REST_Controller {
 			return new \WP_Error( $this->prefix_hook( 'not_found' ), __( 'Action not found.', 'hizzle-store' ), array( 'status' => 400 ) );
 		}
 
-		$result = $object->$action( $request );
+		$result = $object->$method( $request );
 
 		if ( is_wp_error( $result ) ) {
 			return $result;
