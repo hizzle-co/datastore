@@ -169,33 +169,6 @@ class REST_Controller extends \WP_REST_Controller {
 			)
 		);
 
-		// METHODS to perform remote actions.
-		register_rest_route(
-			$this->namespace,
-			'/' . $this->rest_base . '/(?P<id>[\d]+)/remote-action/(?P<action>[a-zA-Z0-9_-]+)',
-			array(
-				'args'   => array(
-					'id' => array(
-						'description' => __( 'Unique identifier for the object.', 'hizzle-store' ),
-						'type'        => 'integer',
-					),
-					'action' => array(
-						'description' => 'Unique identifier for the action.',
-						'type'        => 'string',
-					),
-				),
-				array(
-					'methods'             => \WP_REST_Server::EDITABLE,
-					'callback'            => array( $this, 'remote_action' ),
-					'permission_callback' => array( $this, 'update_item_permissions_check' ),
-					'args'                => array(
-						'context' => $this->get_context_param( array( 'default' => 'edit' ) ),
-					),
-				),
-				'schema' => '__return_empty_array',
-			)
-		);
-
 		// Allow operations by other unique keys.
 		if ( ! empty( $collection->keys['unique'] ) ) {
 
@@ -624,44 +597,6 @@ class REST_Controller extends \WP_REST_Controller {
 	}
 
 	/**
-	 * Performs a remote action on an object.
-	 *
-	 * @since 1.0.0
-	 *
-	 * @param \WP_REST_Request $request Full details about the request.
-	 * @return \WP_REST_Response|WP_Error Response object on success, or WP_Error object on failure.
-	 */
-	public function remote_action( $request ) {
-		$object = $this->get_object( $request );
-
-		if ( ! $object || ! $object->exists() ) {
-			return new \WP_Error( $this->prefix_hook( 'not_found' ), __( 'Record not found.', 'hizzle-store' ), array( 'status' => 404 ) );
-		}
-
-		$action = $request['action'];
-		$method = 'do_' . $action;
-
-		if ( ! method_exists( $object, $method ) ) {
-			return new \WP_Error( $this->prefix_hook( 'not_found' ), __( 'Action not found.', 'hizzle-store' ), array( 'status' => 400 ) );
-		}
-
-		$result = $object->$method( $request );
-
-		if ( is_wp_error( $result ) ) {
-			return $result;
-		}
-
-		$data = $this->prepare_item_for_response( $object, $request );
-
-		return rest_ensure_response(
-			array(
-				'result' => $result,
-				'record' => $data,
-			)
-		);
-	}
-
-	/**
 	 * Creates one item from the collection.
 	 *
 	 * @since 1.0.0
@@ -877,6 +812,11 @@ class REST_Controller extends \WP_REST_Controller {
 					if ( is_array( $value ) && ! is_array( current( $value ) ) ) {
 						$value = implode( ',', $value );
 					}
+				} elseif ( is_callable( array( $item, "get_formatted_{$key}" ) ) ) {
+					$value = array(
+						'raw'      => $value,
+						'rendered' => $item->{"get_formatted_{$key}"}(),
+					);
 				}
 
 				$data[ $key ] = $value;
