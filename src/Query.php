@@ -292,15 +292,17 @@ class Query {
 				throw new Store_Exception( 'query_invalid_field', __( 'Invalid aggregate field.', 'hizzle-store' ) );
 			}
 
-			// Ensure the function is supported.
-			$function_upper = strtoupper( $function );
-			if ( ! in_array( $function_upper, array( 'AVG', 'COUNT', 'MAX', 'MIN', 'SUM' ), true ) ) {
-				throw new Store_Exception( 'query_invalid_function', __( 'Invalid aggregate function.', 'hizzle-store' ) );
+			foreach ( wp_parse_list( $function ) as $function ) {
+
+				// Ensure the function is supported.
+				$function_upper = strtoupper( $function );
+				if ( ! in_array( $function_upper, array( 'AVG', 'COUNT', 'MAX', 'MIN', 'SUM' ), true ) ) {
+					throw new Store_Exception( 'query_invalid_function', __( 'Invalid aggregate function.', 'hizzle-store' ) );
+				}
+
+				$function             = strtolower( $function );
+				$this->query_fields[] = "$function_upper($table_field) AS {$function}_{$field}";
 			}
-
-			$function             = strtolower( $function );
-			$this->query_fields[] = "$function_upper($table_field) AS {$function}_{$field}";
-
 		}
 
 		// Prepare groupby fields.
