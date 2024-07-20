@@ -918,5 +918,4 @@ class Query {
 		}
 
 	}
-
 }
