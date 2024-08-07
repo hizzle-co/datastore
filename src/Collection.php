@@ -126,6 +126,13 @@ class Collection {
 	public $labels = array();
 
 	/**
+	 * Extra settings.
+	 *
+	 * @var array
+	 */
+	public $settings = array();
+
+	/**
 	 * A list of class instances
 	 *
 	 * @var Collection[]
