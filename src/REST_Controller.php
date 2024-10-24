@@ -1195,6 +1195,8 @@ class REST_Controller extends \WP_REST_Controller {
 			return is_wp_error( $result ) ? $result : array( 'updated' => true, 'id' => $id );
 		}
 
+		do_action( $collection->get_full_name() . '_before_import_item', $item );
+
 		// Create item.
 		$result = rest_ensure_response( $this->create_batch_item( $request, $item ) );
 
