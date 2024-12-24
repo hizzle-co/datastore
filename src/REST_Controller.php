@@ -619,7 +619,17 @@ class REST_Controller extends \WP_REST_Controller {
 			return new \WP_Error( $this->prefix_hook( 'not_found' ), __( 'Record not found.', 'hizzle-store' ), array( 'status' => 404 ) );
 		}
 
-		return rest_ensure_response( array_values( $object->get_overview() ) );
+		return rest_ensure_response(
+			array_values(
+				apply_filters(
+					$this->prefix_hook( 'get_record_overview' ),
+					$object->get_overview(),
+					$object,
+					$request,
+					$this
+				)
+			)
+		);
 
 	}
 
