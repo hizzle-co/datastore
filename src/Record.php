@@ -566,9 +566,9 @@ class Record {
 		}
 
 		if ( $prop->is_meta_key && $prop->is_meta_key_multiple ) {
-			$value    = array_values( $this->parse_list( $value, true ) );
+			$value    = $this->parse_list( $value, true );
 			$existing = $this->get( $prop );
-			$existing = is_array( $existing ) ? array_values( $existing ) : array();
+			$existing = is_array( $existing ) ? $existing : array();
 
 			if ( $is_adding ) {
 				$value = array_unique( array_merge( $existing, $value ) );
@@ -673,6 +673,9 @@ class Record {
 					$offset    = ! empty( $date_bits[7] ) ? iso8601_timezone_to_offset( $date_bits[7] ) : wp_timezone()->getOffset( new \DateTime( 'now' ) );
 					$timestamp = gmmktime( $date_bits[4], $date_bits[5], $date_bits[6], $date_bits[2], $date_bits[3], $date_bits[1] ) - $offset;
 					$datetime  = new Date_Time( "@{$timestamp}", new \DateTimeZone( 'UTC' ) );
+				} elseif ( 1 === preg_match( '/^(\d{4})-(\d{2})-(\d{2})$/', $value, $date_bits ) ) {
+					// Handle Y-m-d format by defaulting to midnight.
+					$datetime = new Date_Time( $value . ' 23:59:59', wp_timezone() );
 				} else {
 					$datetime = new Date_Time( $value, wp_timezone() );
 				}
