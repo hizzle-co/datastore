@@ -330,7 +330,7 @@ class Query {
 					$case_sql .= " ELSE $else_sql";
 				}
 
-				$case_sql .= " END";
+				$case_sql .= ' END';
 
 				// Handle optional aggregate function wrapper
 				if ( isset( $aggregate['function'] ) ) {
@@ -495,37 +495,87 @@ class Query {
 			$expression = str_replace( '{field}', $field, $expression );
 		}
 
-		// Split the expression into parts.
-		$parts = preg_split( '/([+\-*\/])/', $expression, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY );
+		// Handle parentheses by processing inner expressions first
+		while ( preg_match( '/\(([^()]+)\)/', $expression, $matches ) ) {
+			$inner_result = $this->process_simple_expression( $matches[1] );
+			$expression   = str_replace( $matches[0], $inner_result, $expression );
+		}
 
-		// Process each part.
+		// Process the remaining expression
+		return $this->process_simple_expression( $expression );
+	}
+
+	/**
+	 * Processes a simple math expression without parentheses
+	 *
+	 * @param string $expression The simple math expression
+	 * @return string
+	 */
+	protected function process_simple_expression( $expression ) {
+		// Enhanced regex to handle operators, negative numbers, decimals, and functions
+		$pattern = '/([+\-*\/])|(\w+\s*\()|(\))|(-?\d*\.?\d+)|([a-zA-Z_][a-zA-Z0-9_]*)/';
+
+		preg_match_all( $pattern, $expression, $matches, PREG_OFFSET_CAPTURE );
+
 		$processed_parts = array();
-		foreach ( $parts as $part ) {
-			$part = trim( $part );
+		$i               = 0;
+		$total           = count( $matches[0] );
 
-			// If it's an operator, add it directly
-			if ( in_array( $part, array( '+', '-', '*', '/' ), true ) ) {
-				$processed_parts[] = $part;
+		while ( $i < $total ) {
+			$match = $matches[0][ $i ][0];
+			$match = trim( $match );
+			++$i;
+
+			if ( empty( $match ) ) {
 				continue;
 			}
 
-			// Numbers.
-			if ( is_numeric( $part ) ) {
-				$processed_parts[] = esc_sql( (float) $part );
+			// Operators
+			if ( preg_match( '/^[+\-*\/]$/', $match ) ) {
+				$processed_parts[] = $match;
 				continue;
 			}
 
-			// If it's a field reference, prefix it
-			$prefixed_field = $this->prefix_field( esc_sql( sanitize_key( $part ) ) );
+			// SQL Functions (e.g., ABS, ROUND, etc.)
+			if ( preg_match( '/^(\w+)\s*\($/', $match ) ) {
+				$function = trim( str_replace( '(', '', $match ) );
 
-			if ( empty( $prefixed_field ) ) {
-				throw new Store_Exception( 'query_invalid_field', 'Invalid field in math expression.' );
+				// Validate allowed functions
+				$allowed_functions = array( 'ABS', 'ROUND', 'CEIL', 'FLOOR', 'SQRT', 'POW' );
+				if ( ! in_array( strtoupper( $function ), $allowed_functions, true ) ) {
+					throw new Store_Exception( 'query_invalid_function', 'Invalid function in math expression.' );
+				}
+
+				$processed_parts[] = strtoupper( $function ) . '(';
+				continue;
 			}
 
-			if ( ! empty( $prefixed_field ) ) {
+			// Closing parenthesis
+			if ( ')' === $match ) {
+				$processed_parts[] = ')';
+				continue;
+			}
+
+			// Numbers (including negative and decimals)
+			if ( is_numeric( $match ) ) {
+				$processed_parts[] = esc_sql( (float) $match );
+				continue;
+			}
+
+			// Field references
+			if ( preg_match( '/^[a-zA-Z_][a-zA-Z0-9_]*$/', $match ) ) {
+				$prefixed_field = $this->prefix_field( esc_sql( sanitize_key( $match ) ) );
+
+				if ( empty( $prefixed_field ) ) {
+					throw new Store_Exception( 'query_invalid_field', 'Invalid field in math expression: ' . $match );
+				}
+
 				$processed_parts[] = $prefixed_field;
 				continue;
 			}
+
+			// If we get here, it's an unrecognized token
+			throw new Store_Exception( 'query_invalid_expression', 'Invalid token in math expression: ' . $match );
 		}
 
 		return implode( ' ', $processed_parts );
