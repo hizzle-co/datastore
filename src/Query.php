@@ -305,32 +305,36 @@ class Query {
 		$this->query_fields = array();
 
 		// Prepare aggregate fields.
-		foreach ( $aggregate_fields as $field => $function ) {
+		foreach ( $aggregate_fields as $field => $aggregate ) {
+
+			if ( ! is_array( $aggregate ) ) {
+				$aggregate = wp_parse_list( $aggregate );
+			}
 
 			// Handle CASE expressions
-			if ( is_array( $function ) && isset( $function['case'] ) ) {
-				$case_field = $this->prefix_field( esc_sql( sanitize_key( $function['case']['field'] ) ) );
+			if ( is_array( $aggregate ) && isset( $aggregate['case'] ) ) {
+				$case_field = $this->prefix_field( esc_sql( sanitize_key( $aggregate['case']['field'] ) ) );
 				if ( empty( $case_field ) ) {
 					throw new Store_Exception( 'query_invalid_field', 'Invalid case field.' );
 				}
 
 				$case_sql = "CASE $case_field";
-				foreach ( $function['case']['when'] as $when => $then ) {
-					$when     = esc_sql( $when );
-					$then_sql = $this->prepare_case_then( $then );
+				foreach ( $aggregate['case']['when'] as $when => $then ) {
+					$when      = esc_sql( $when );
+					$then_sql  = $this->prepare_case_then( $then );
 					$case_sql .= " WHEN '$when' THEN $then_sql";
 				}
 
-				if ( isset( $function['case']['else'] ) ) {
-					$else_sql = $this->prepare_case_then( $function['case']['else'] );
+				if ( isset( $aggregate['case']['else'] ) ) {
+					$else_sql  = $this->prepare_case_then( $aggregate['case']['else'] );
 					$case_sql .= " ELSE $else_sql";
 				}
 
 				$case_sql .= " END";
 
 				// Handle optional aggregate function wrapper
-				if ( isset( $function['function'] ) ) {
-					$agg_function = strtoupper( $function['function'] );
+				if ( isset( $aggregate['function'] ) ) {
+					$agg_function = strtoupper( $aggregate['function'] );
 					if ( ! in_array( $agg_function, array( 'AVG', 'COUNT', 'MAX', 'MIN', 'SUM' ), true ) ) {
 						throw new Store_Exception( 'query_invalid_function', 'Invalid aggregate function.' );
 					}
@@ -338,8 +342,8 @@ class Query {
 				}
 
 				// Handle optional math operations
-				if ( isset( $function['math'] ) ) {
-					$math_op = $this->prepare_math_expression( $function['math'] );
+				if ( isset( $aggregate['math'] ) ) {
+					$math_op  = $this->prepare_math_expression( $aggregate['math'] );
 					$case_sql = "($case_sql $math_op)";
 				}
 
@@ -355,7 +359,20 @@ class Query {
 				throw new Store_Exception( 'query_invalid_field', 'Invalid aggregate field.' );
 			}
 
-			foreach ( wp_parse_list( $function ) as $function ) {
+			foreach ( array_filter( $aggregate ) as $function ) {
+
+				if ( is_array( $function ) ) {
+					if ( ! isset( $function['function'] ) ) {
+						throw new Store_Exception( 'query_invalid_function', 'Invalid aggregate function configuration.' );
+					}
+
+					$as          = isset( $function['as'] ) ? esc_sql( sanitize_key( $function['as'] ) ) : strtolower( $function['function'] ) . '_' . $field;
+					$query_field = isset( $function['expression'] ) ? $this->prepare_math_expression( $function['expression'], $field ) : $table_field;
+					$function    = $function['function'];
+				} else {
+					$as          = strtolower( $function ) . '_' . $field;
+					$query_field = $table_field;
+				}
 
 				// Ensure the function is supported.
 				$function_upper = strtoupper( $function );
@@ -363,8 +380,7 @@ class Query {
 					throw new Store_Exception( 'query_invalid_function', 'Invalid aggregate function.' );
 				}
 
-				$function             = strtolower( $function );
-				$this->query_fields[] = "$function_upper($table_field) AS {$function}_{$field}";
+				$this->query_fields[] = "$function_upper($query_field) AS $as";
 			}
 		}
 
