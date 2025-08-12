@@ -732,7 +732,7 @@ class Collection {
 	 * @return string The cache key.
 	 */
 	private function get_prop_cache_key( $prop ) {
-		$current_version = 'v2_';
+		$current_version = 'v2'; // Update this version when the cache key structure changes.
 		return $this->hook_prefix( $current_version . '_ids_by_' . $prop, true );
 	}
 
