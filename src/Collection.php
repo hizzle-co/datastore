@@ -726,6 +726,17 @@ class Collection {
 	}
 
 	/**
+	 * Returns a prop's cache key.
+	 *
+	 * @param string $prop The prop to get the cache key for.
+	 * @return string The cache key.
+	 */
+	private function get_prop_cache_key( $prop ) {
+		$current_version = 'v2_';
+		return $this->hook_prefix( $current_version . '_ids_by_' . $prop, true );
+	}
+
+	/**
 	 * Retrieves an ID by a given prop.
 	 *
 	 * @param string $prop The prop to search by.
@@ -740,8 +751,9 @@ class Collection {
 		}
 
 		// Try the cache.
-		$value = trim( $value );
-		$id    = wp_cache_get( $value, $this->hook_prefix( 'ids_by_' . $prop, true ) );
+		$value     = trim( $value );
+		$cache_key = $this->get_prop_cache_key( $prop );
+		$id        = wp_cache_get( $value, $cache_key );
 
 		// Maybe retrieve from the db.
 		if ( false === $id ) {
@@ -752,7 +764,7 @@ class Collection {
 			$id    = empty( $id ) ? 0 : (int) $id;
 
 			// Update the cache.
-			wp_cache_set( $value, $id, $this->hook_prefix( 'ids_by_' . $prop, true ) );
+			wp_cache_set( $value, $id, $cache_key, empty( $id ) ? MINUTE_IN_SECONDS : HOUR_IN_SECONDS );
 		}
 
 		return (int) $id;
@@ -845,8 +857,8 @@ class Collection {
 		// Apply changes.
 		$record->apply_changes();
 
-		// Clear the cache.
-		$this->clear_cache( $record->get_data() );
+		// Clear any stale cache entries.
+		$this->clear_cache( $record );
 
 		// Fires after creating a record.
 		do_action( $this->hook_prefix( 'created', true ), $record );
@@ -1207,6 +1219,10 @@ class Collection {
 		// Fires before updating a record.
 		do_action( $this->hook_prefix( 'before_update', true ), $record );
 
+		// Clear cache early to prevent race conditions and stale data
+		// Do this before any database operations
+		$this->clear_cache( $record );
+
 		$raw_changes = array_keys( $record->get_changes() );
 		$has_changes = apply_filters( $this->hook_prefix( 'should_fire_has_changes_hook', true ), ! empty( $raw_changes ), $raw_changes, $record );
 		$changes     = array();
@@ -1237,9 +1253,6 @@ class Collection {
 
 		// Apply changes.
 		$record->apply_changes();
-
-		// Clear the cache.
-		$this->clear_cache( $record->get_data() );
 
 		if ( $has_changes ) {
 
@@ -1520,36 +1533,76 @@ class Collection {
 		}
 
 		// Ensure we have an array.
-		if ( ! is_array( $record ) ) {
+		if ( ! is_array( $record ) || empty( $record['id'] ) ) {
 			return;
 		}
 
+		// Cache lookup values for faster queries
 		foreach ( $this->get_cache_keys() as $key ) {
 			if ( isset( $record[ $key ] ) && ! empty( $record[ $key ] ) ) {
-				wp_cache_set( $record[ $key ], $record['id'], $this->hook_prefix( 'ids_by_' . $key, true ), WEEK_IN_SECONDS );
+				wp_cache_set( $record[ $key ], $record['id'], $this->get_prop_cache_key( $key ), HOUR_IN_SECONDS );
 			}
 		}
 
 		// Cache the entire record.
-		wp_cache_set( $record['id'], $record, $this->get_full_name(), DAY_IN_SECONDS );
+		wp_cache_set( $record['id'], $record, $this->get_full_name(), HOUR_IN_SECONDS );
 	}
 
 	/**
 	 * Clean caches.
 	 *
-	 * @param object $record The raw db record.
+	 * @param Record $record The raw db record.
 	 */
 	public function clear_cache( $record ) {
 
-		$record = (object) $record;
-
 		foreach ( $this->get_cache_keys() as $key ) {
-			if ( ! is_null( $record->$key ) && '' !== $record->$key ) {
-				wp_cache_delete( $record->$key, $this->hook_prefix( 'ids_by_' . $key, true ) );
+			$value = $record->get( $key );
+			if ( is_string( $value ) && '' !== $value ) {
+				wp_cache_delete( $value, $this->get_prop_cache_key( $key ) );
 			}
 		}
 
-		wp_cache_delete( $record->id, $this->get_full_name() );
+		// Bail early if the record doesn't exist.
+		if ( ! $record->exists() ) {
+			return;
+		}
+
+		// Clear the main record cache.
+		wp_cache_delete( $record->get_id(), $this->get_full_name() );
+
+		// Clear any potential old cache entries by attempting to fetch and clear them
+		// This handles cases where cache keys have changed due to updates
+		$this->clear_stale_cache_entries( $record->get_id() );
+	}
+
+	/**
+	 * Clears potentially stale cache entries for a record.
+	 *
+	 * @param int $record_id The record ID.
+	 */
+	private function clear_stale_cache_entries( $record_id ) {
+		global $wpdb;
+
+		// For updates, we need to clear cache for old values that might have changed
+		if ( ! empty( $record_id ) ) {
+
+			// Get the current database values to clear any old cached entries
+			$table_name   = $this->get_db_table_name();
+			$current_data = $wpdb->get_row(
+				$wpdb->prepare( "SELECT * FROM $table_name WHERE id = %d", $record_id ), // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+				ARRAY_A
+			);
+
+			if ( $current_data ) {
+				foreach ( $this->get_cache_keys() as $key ) {
+					$value = $current_data[ $key ] ?? null;
+					if ( is_string( $value ) && '' !== $value ) {
+						// Clear cache for database values (in case they differ from the record object)
+						wp_cache_delete( $value, $this->get_prop_cache_key( $key ) );
+					}
+				}
+			}
+		}
 	}
 
 	/**
@@ -1600,7 +1653,7 @@ class Collection {
 	 * @param string $key The label key.
 	 * @param string $default The default label.
 	 */
-	public function get_label( $key, $default ) {
-		return isset( $this->labels[ $key ] ) ? $this->labels[ $key ] : $default;
+	public function get_label( $key, $default_value ) {
+		return $this->labels[ $key ] ?? $default_value;
 	}
 }
