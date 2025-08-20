@@ -426,7 +426,6 @@ class Collection {
 			if ( 'primary' === $index ) {
 				$schema .= "PRIMARY KEY  ($cols),\n"; // Maintain 2 spaces between key and opening bracket.
 			} elseif ( 'unique' === $index ) {
-
 				foreach ( $cols as $prop => $index ) {
 					$schema .= "UNIQUE KEY $prop ($index),\n";
 				}
@@ -789,7 +788,6 @@ class Collection {
 
 			// Date fields.
 			if ( $value instanceof Date_Time ) {
-
 				if ( ! empty( $this->props[ $key ] ) && 'date' === strtolower( $this->props[ $key ]->type ) ) {
 					$value = $value->utc( 'Y-m-d' );
 				} else {
@@ -1028,7 +1026,6 @@ class Collection {
 			$new     = is_null( $new ) ? '' : $new;
 
 			if ( $prop->is_meta_key_multiple ) {
-
 				$new       = (array) $new;
 				$to_delete = array_diff( $current, $new );
 				$to_create = array_diff( $new, $current );
@@ -1123,7 +1120,6 @@ class Collection {
 				// Ensure there is always a record to avoid any errors.
 				$this->save_defaults( $record );
 				$raw_data = $record->get_data();
-
 			} elseif ( empty( $raw_data ) ) {
 				$this->not_found();
 			}
@@ -1139,7 +1135,6 @@ class Collection {
 
 			// Cache the record data.
 			$this->update_cache( $data );
-
 		}
 
 		return empty( $data ) ? array() : (array) $data;
@@ -1280,7 +1275,7 @@ class Collection {
 		do_action( $this->hook_prefix( 'before_delete', true ), $record );
 
 		// Invalidate cache.
-		$this->clear_cache( $record->get_data() );
+		$this->clear_cache( $record );
 
 		// If this is a CPT, delete the post.
 		if ( $this->is_cpt() ) {
