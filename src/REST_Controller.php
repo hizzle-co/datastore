@@ -608,38 +608,15 @@ class REST_Controller extends \WP_REST_Controller {
 
 		$max_pages = $total > 0 && $per_page > 1 ? ceil( $total / $per_page ) : 1;
 
-		if ( ! $request->get_param( '__next_as_array' ) ) {
-			$response = rest_ensure_response(
-				apply_filters(
-					$this->prefix_hook( 'get_items' ),
-					array(
-						'items'   => $items,
-						'summary' => (object) array(
-							'total' => array(
-								'label' => $query->get_total() === 1 ?
-									$collection->get_label( 'singular_name', $collection->get_singular_name() )
-									: $collection->get_label( 'name', $collection->get_name() ),
-								'value' => $query->get_total(),
-							),
-						),
-						'total'   => $total,
-					),
-					$query,
-					$request,
-					$this
-				)
-			);
-		} else {
-			$response = rest_ensure_response(
-				apply_filters(
-					$this->prefix_hook( 'get_collection_items' ),
-					$items,
-					$query,
-					$request,
-					$this
-				)
-			);
-		}
+		$response = rest_ensure_response(
+			apply_filters(
+				$this->prefix_hook( 'get_collection_items' ),
+				$items,
+				$query,
+				$request,
+				$this
+			)
+		);
 
 		// Add headers.
 		$response->header( 'X-WP-Total', $total );
