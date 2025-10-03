@@ -238,7 +238,6 @@ class REST_Controller extends \WP_REST_Controller {
 
 		// Allow operations by other unique keys.
 		if ( ! empty( $collection->keys['unique'] ) ) {
-
 			$keys = implode( '|', $collection->keys['unique'] );
 
 			// METHODS to READ, UPDATE and DELETE a single record.
@@ -994,11 +993,9 @@ class REST_Controller extends \WP_REST_Controller {
 
 				// Special handling for metadata.
 				if ( 'metadata' === $arg ) {
-
 					$metadata = is_array( $request[ $arg ] ) ? $request[ $arg ] : array();
 
 					foreach ( $metadata as $key => $value ) {
-
 						if ( '' === $value ) {
 							$record->remove_meta( $key );
 						} else {
@@ -1049,7 +1046,6 @@ class REST_Controller extends \WP_REST_Controller {
 
 				// Normalize values when exporting.
 				if ( ! empty( $request['__fields'] ) ) {
-
 					if ( is_bool( $value ) ) {
 						$value = (int) $value;
 					}
@@ -1230,7 +1226,6 @@ class REST_Controller extends \WP_REST_Controller {
 
 		// Process the batches.
 		foreach ( $items as $action => $action_items ) {
-
 			if ( ! isset( $responses[ $action ] ) ) {
 				$responses[ $action ] = array();
 			}
@@ -1493,7 +1488,6 @@ class REST_Controller extends \WP_REST_Controller {
 			$hidden  = array( 'id' );
 
 			foreach ( $collection->get_props() as $prop ) {
-
 				if ( $prop->is_dynamic ) {
 					$hidden[] = $prop->name;
 				}
