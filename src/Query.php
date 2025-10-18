@@ -430,6 +430,9 @@ class Query {
 				throw new Store_Exception( 'query_invalid_field', 'Invalid aggregate field.' );
 			}
 
+			// We cannot use the $field variable directly since it may contain dots which are not allowed in SQL aliases.
+			$field = esc_sql( 'cast_' . str_replace( '.', '_', $field ) );
+
 			foreach ( array_filter( $aggregate ) as $function ) {
 
 				if ( is_array( $function ) ) {
