@@ -431,7 +431,7 @@ class Query {
 			}
 
 			// We cannot use the $field variable directly since it may contain dots which are not allowed in SQL aliases.
-			$field = esc_sql( 'cast_' . str_replace( '.', '_', $field ) );
+			$field = str_replace( '.', '_', $field );
 
 			foreach ( array_filter( $aggregate ) as $function ) {
 
