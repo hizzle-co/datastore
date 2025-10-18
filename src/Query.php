@@ -1,13 +1,13 @@
 <?php
 
-namespace Hizzle\Store;
-
 /**
  * Store API: Queries a collection of data.
  *
  * @since   1.0.0
  * @package Hizzle\Store
  */
+
+namespace Hizzle\Store;
 
 // Exit if accessed directly.
 defined( 'ABSPATH' ) || exit;
@@ -195,6 +195,25 @@ class Query {
 	}
 
 	/**
+	 * Retrieves a joined collection.
+	 *
+	 * @return Collection
+	 */
+	public function get_joined_collection( $join ) {
+		$collection = $this->get_collection();
+
+		// Throw error if not supported.
+		if ( ! isset( $collection->joins[ $join ] ) ) {
+			throw new Store_Exception(
+				'query_invalid_join',
+				sprintf( 'Invalid join requested: %s.', esc_html( $join ) )
+			);
+		}
+
+		return Collection::instance( $collection->joins[ $join ]['collection'] );
+	}
+
+	/**
 	 * Prepare the query variables.
 	 *
 	 * Open https://yourwebsite.com/wp-json/$namespace/v1/$collection/ to see the allowed query parameters.
@@ -206,7 +225,7 @@ class Query {
 	public function prepare_query( $query = array() ) {
 		global $wpdb;
 
-		$collection        = Collection::instance( $this->collection_name );
+		$collection        = $this->get_collection();
 		$this->query_limit = null;
 		$this->query_join  = '';
 		$this->query_vars  = $this->fill_query_vars( $query );
@@ -238,11 +257,13 @@ class Query {
 			$this->query_join .= " INNER JOIN {$wpdb->posts} ON $table.id = {$wpdb->posts}.ID";
 		}
 
-		// Prepare custom joins from collection configuration.
-		$this->prepare_collection_joins( $qv, $table );
-
 		// Prepare query fields.
 		if ( $aggregate ) {
+			// Prepare custom joins from collection configuration.
+			if ( ! empty( $qv['join'] ) ) {
+				$this->prepare_collection_joins( $qv );
+			}
+
 			$this->prepare_aggregate_query( $qv );
 		} else {
 			$this->prepare_fields( $qv, $table );
@@ -277,67 +298,45 @@ class Query {
 	 *
 	 * @since 1.0.0
 	 * @param array  $qv The query vars.
-	 * @param string $table The table name.
 	 * @global \wpdb $wpdb WordPress database abstraction object.
 	 */
-	protected function prepare_collection_joins( $qv, $table ) {
-		global $wpdb;
+	protected function prepare_collection_joins( $qv ) {
 
 		$collection = $this->get_collection();
 
-		// Abort if no joins are configured.
-		if ( empty( $collection->joins ) ) {
-			return;
-		}
+		// Loop through all requested joins.
+		foreach ( wp_parse_list( $qv['join'] ) as $requested_join ) {
 
-		// Check if specific joins are requested via query vars.
-		$requested_joins = array();
-		if ( ! empty( $qv['join'] ) ) {
-			$requested_joins = is_array( $qv['join'] ) ? $qv['join'] : array( $qv['join'] );
-		}
-
-		// Process each join configuration.
-		foreach ( $collection->joins as $join_alias => $join_config ) {
-
-			// Skip if specific joins are requested and this isn't one of them.
-			if ( ! empty( $requested_joins ) && ! in_array( $join_alias, $requested_joins, true ) ) {
-				continue;
-			}
-
-			// Validate join configuration.
-			if ( empty( $join_config['collection'] ) || empty( $join_config['on'] ) ) {
-				continue;
-			}
-
-			// Get the related collection.
-			try {
-				$related_collection = Collection::instance( $join_config['collection'] );
-			} catch ( Store_Exception $e ) {
-				continue;
-			}
+			// Prepare the collection.
+			$related_collection = $this->get_joined_collection( $requested_join );
 
 			$related_table = $related_collection->get_db_table_name();
-			$join_type     = ! empty( $join_config['type'] ) ? strtoupper( $join_config['type'] ) : 'INNER';
+			$join_config   = $collection->joins[ $requested_join ];
+			$join_type     = strtoupper( $join_config['type'] ?? 'INNER' );
 
 			// Validate join type.
 			if ( ! in_array( $join_type, array( 'INNER', 'LEFT', 'RIGHT' ), true ) ) {
 				$join_type = 'INNER';
 			}
 
-			// Determine the join condition.
-			$local_key   = esc_sql( sanitize_key( $join_config['on'] ) );
-			$foreign_key = ! empty( $join_config['foreign_key'] ) ? esc_sql( sanitize_key( $join_config['foreign_key'] ) ) : 'id';
+			// Determine the local field.
+			$local_key = $this->prefix_field( $join_config['on'] ?? '' );
 
-			// Build the join clause.
-			$this->query_join .= " $join_type JOIN $related_table AS " . esc_sql( $join_alias );
-			$this->query_join .= " ON $table.$local_key = " . esc_sql( $join_alias ) . ".$foreign_key";
-
-			// Register the join alias as a known field source.
-			if ( ! isset( $this->known_fields['joins'] ) ) {
-				$this->known_fields['joins'] = array();
+			if ( empty( $local_key ) ) {
+				throw new Store_Exception( 'query_invalid_field', 'Invalid local key field in JOIN config.' );
 			}
 
-			$this->known_fields['joins'][ $join_alias ] = $related_collection;
+			// Determine the foreign field.
+			$foreign_key = ! empty( $join_config['foreign_key'] ) ? $join_config['foreign_key'] : 'id';
+			$foreign_key = $this->prefix_field( "{$requested_join}.$foreign_key", $related_collection );
+
+			if ( empty( $foreign_key ) ) {
+				throw new Store_Exception( 'query_invalid_field', 'Invalid foreign key field in JOIN config.' );
+			}
+
+			// Build the join clause.
+			$this->query_join .= " $join_type JOIN $related_table AS " . esc_sql( $requested_join );
+			$this->query_join .= " ON $local_key = $foreign_key";
 		}
 	}
 
@@ -385,7 +384,7 @@ class Query {
 
 			// Handle CASE expressions
 			if ( is_array( $aggregate ) && isset( $aggregate['case'] ) ) {
-				$case_field = $this->prefix_field( esc_sql( sanitize_key( $aggregate['case']['field'] ) ) );
+				$case_field = $this->prefix_field( esc_sql( $aggregate['case']['field'] ) );
 				if ( empty( $case_field ) ) {
 					throw new Store_Exception( 'query_invalid_field', 'Invalid case field.' );
 				}
@@ -424,7 +423,7 @@ class Query {
 			}
 
 			// Ensure the field is supported.
-			$field       = esc_sql( sanitize_key( $field ) );
+			$field       = esc_sql( $field );
 			$table_field = $this->prefix_field( $field );
 
 			if ( empty( $table_field ) ) {
@@ -438,7 +437,7 @@ class Query {
 						throw new Store_Exception( 'query_invalid_function', 'Invalid aggregate function configuration.' );
 					}
 
-					$as          = isset( $function['as'] ) ? esc_sql( sanitize_key( $function['as'] ) ) : strtolower( $function['function'] ) . '_' . $field;
+					$as          = isset( $function['as'] ) ? esc_sql( $function['as'] ) : strtolower( $function['function'] ) . '_' . $field;
 					$query_field = isset( $function['expression'] ) ? $this->prepare_math_expression( $function['expression'], $field ) : $table_field;
 					$function    = $function['function'];
 				} else {
@@ -469,15 +468,20 @@ class Query {
 				}
 
 				// Ensure the field is supported.
-				$field       = esc_sql( sanitize_key( $field ) );
+				$field       = esc_sql( $field );
 				$table_field = $this->prefix_field( $field );
 				if ( empty( $table_field ) ) {
-					throw new Store_Exception( 'query_invalid_field', 'Invalid group by field.' );
+					throw new Store_Exception(
+						'query_invalid_field',
+						sprintf( 'Invalid group by field: %s', esc_html( $field ) )
+					);
 				}
+
+				// We cannot use the $field variable directly since it may contain dots which are not allowed in SQL aliases.
+				$field = esc_sql( 'cast_' . str_replace( '.', '_', $field ) );
 
 				// Handle casting and timezone conversion
 				if ( $cast ) {
-					$field = 'cast_' . $field;
 					switch ( $cast ) {
 						case 'hour':
 							$table_field = "DATE_FORMAT(CONVERT_TZ($table_field, '+00:00', '$timezone'), '%Y-%m-%d %H:00:00')";
@@ -496,12 +500,13 @@ class Query {
 							break;
 						default:
 							// If an unsupported cast is provided, just use the field as is
+							$field = $cast;
 							break;
 					}
 				}
 
 				$this->query_groupby .= ', ' . $field;
-				$this->query_fields[] = $table_field . ' AS ' . esc_sql( $field );
+				$this->query_fields[] = $table_field . ' AS ' . $field;
 			}
 
 			$this->query_groupby = 'GROUP BY ' . ltrim( $this->query_groupby, ',' );
@@ -512,7 +517,7 @@ class Query {
 			foreach ( wp_parse_list( $qv['extra_fields'] ) as $field ) {
 
 				// Ensure the field is supported.
-				$field = $this->prefix_field( esc_sql( sanitize_key( $field ) ) );
+				$field = $this->prefix_field( esc_sql( $field ) );
 				if ( empty( $field ) ) {
 					throw new Store_Exception( 'query_invalid_field', 'Invalid extra field.' );
 				}
@@ -540,7 +545,7 @@ class Query {
 			return esc_sql( (float) $then );
 		}
 
-		$field = $this->prefix_field( esc_sql( sanitize_key( $then['field'] ) ) );
+		$field = $this->prefix_field( esc_sql( $then['field'] ) );
 		if ( empty( $field ) ) {
 			throw new Store_Exception( 'query_invalid_field', 'Invalid field in CASE expression.' );
 		}
@@ -636,10 +641,10 @@ class Query {
 
 			// Field references
 			if ( preg_match( '/^[a-zA-Z_][a-zA-Z0-9_]*$/', $match ) ) {
-				$prefixed_field = $this->prefix_field( esc_sql( sanitize_key( $match ) ) );
+				$prefixed_field = $this->prefix_field( esc_sql( $match ) );
 
 				if ( empty( $prefixed_field ) ) {
-					throw new Store_Exception( 'query_invalid_field', 'Invalid field in math expression: ' . $match );
+					throw new Store_Exception( 'query_invalid_field', 'Invalid field in math expression: ' . esc_html( $match ) );
 				}
 
 				$processed_parts[] = $prefixed_field;
@@ -647,7 +652,7 @@ class Query {
 			}
 
 			// If we get here, it's an unrecognized token
-			throw new Store_Exception( 'query_invalid_expression', 'Invalid token in math expression: ' . $match );
+			throw new Store_Exception( 'query_invalid_expression', 'Invalid token in math expression: ' . esc_html( $match ) );
 		}
 
 		return implode( ' ', $processed_parts );
@@ -677,10 +682,10 @@ class Query {
 
 			$query_fields = array();
 			foreach ( $qv['fields'] as $field ) {
-				$table_field = $this->prefix_field( esc_sql( sanitize_key( $field ) ) );
+				$table_field = $this->prefix_field( esc_sql( $field ) );
 
 				if ( empty( $table_field ) ) {
-					throw new Store_Exception( 'query_invalid_field', "Invalid field $field." );
+					throw new Store_Exception( 'query_invalid_field', sprintf( 'Invalid field %s.', esc_html( $field ) ) );
 				}
 				$query_fields[] = $table_field;
 			}
@@ -744,7 +749,7 @@ class Query {
 				}
 
 				$not_exists[] = $wpdb->prepare(
-					"( meta_key = %s AND meta_value $where )",
+					"( meta_key = %s AND meta_value $where )", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 					$meta_field
 				);
 			}
@@ -962,11 +967,11 @@ class Query {
 	 * @param array  $cols The columns to search in.
 	 * @return string
 	 */
-	protected function get_search_sql( $string, $cols ) {
+	protected function get_search_sql( $search_string, $cols ) {
 		global $wpdb;
 
 		$searches = array();
-		$string   = trim( $string, '%' );
+		$string   = trim( $search_string, '%' );
 		$like     = '%' . $wpdb->esc_like( $string ) . '%';
 
 		foreach ( $cols as $col ) {
@@ -1122,9 +1127,17 @@ class Query {
 
 		$this->known_fields = $this->get_collection()->get_known_fields();
 
-		// Initialize joins array.
 		if ( ! isset( $this->known_fields['joins'] ) ) {
 			$this->known_fields['joins'] = array();
+		}
+
+		// Add requested joins if any.
+		if ( ! empty( $this->query_vars['join'] ) ) {
+			foreach ( wp_parse_list( $this->query_vars['join'] ) as $join_alias ) {
+				$collection = $this->get_joined_collection( $join_alias );
+
+				$this->known_fields['joins'][ $join_alias ] = $collection->get_known_fields();
+			}
 		}
 	}
 
@@ -1142,12 +1155,17 @@ class Query {
 		// Check for joined table field (format: join_alias.field_name or join_alias__field_name).
 		if ( false !== strpos( $field, '.' ) || false !== strpos( $field, '__' ) ) {
 			$separator = false !== strpos( $field, '.' ) ? '.' : '__';
-			$parts     = explode( $separator, $field, 2 );
+			$parts     = explode( $separator, $field );
 
 			if ( 2 === count( $parts ) && ! empty( $this->known_fields['joins'][ $parts[0] ] ) ) {
-				$join_alias = esc_sql( sanitize_key( $parts[0] ) );
-				$join_field = esc_sql( sanitize_key( $parts[1] ) );
-				return "$join_alias.$join_field";
+				$join_alias = esc_sql( $parts[0] );
+				$join_field = esc_sql( $parts[1] );
+
+				// Ensure the field exists.
+				$join_field = esc_sql( $parts[1] );
+				if ( in_array( $parts[1], $this->known_fields['joins'][ $parts[0] ]['main'], true ) || 'id' === strtolower( $field ) ) {
+					return "$join_alias.$join_field";
+				}
 			}
 		}
 

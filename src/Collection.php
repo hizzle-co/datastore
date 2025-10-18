@@ -696,7 +696,6 @@ class Collection {
 				'items'             => array(
 					'type' => 'string',
 				),
-				'enum'              => array_keys( $this->joins ),
 				'validate_callback' => 'rest_validate_request_arg',
 			);
 		}
