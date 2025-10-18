@@ -238,6 +238,9 @@ class Query {
 			$this->query_join .= " INNER JOIN {$wpdb->posts} ON $table.id = {$wpdb->posts}.ID";
 		}
 
+		// Prepare custom joins from collection configuration.
+		$this->prepare_collection_joins( $qv, $table );
+
 		// Prepare query fields.
 		if ( $aggregate ) {
 			$this->prepare_aggregate_query( $qv );
@@ -267,6 +270,75 @@ class Query {
 
 		// Fires after preparing the query.
 		do_action_ref_array( $collection->hook_prefix( 'after_prepare_query' ), array( &$this ) );
+	}
+
+	/**
+	 * Prepares JOIN clauses from collection configuration.
+	 *
+	 * @since 1.0.0
+	 * @param array  $qv The query vars.
+	 * @param string $table The table name.
+	 * @global \wpdb $wpdb WordPress database abstraction object.
+	 */
+	protected function prepare_collection_joins( $qv, $table ) {
+		global $wpdb;
+
+		$collection = $this->get_collection();
+
+		// Abort if no joins are configured.
+		if ( empty( $collection->joins ) ) {
+			return;
+		}
+
+		// Check if specific joins are requested via query vars.
+		$requested_joins = array();
+		if ( ! empty( $qv['join'] ) ) {
+			$requested_joins = is_array( $qv['join'] ) ? $qv['join'] : array( $qv['join'] );
+		}
+
+		// Process each join configuration.
+		foreach ( $collection->joins as $join_alias => $join_config ) {
+
+			// Skip if specific joins are requested and this isn't one of them.
+			if ( ! empty( $requested_joins ) && ! in_array( $join_alias, $requested_joins, true ) ) {
+				continue;
+			}
+
+			// Validate join configuration.
+			if ( empty( $join_config['collection'] ) || empty( $join_config['on'] ) ) {
+				continue;
+			}
+
+			// Get the related collection.
+			try {
+				$related_collection = Collection::instance( $join_config['collection'] );
+			} catch ( Store_Exception $e ) {
+				continue;
+			}
+
+			$related_table = $related_collection->get_db_table_name();
+			$join_type     = ! empty( $join_config['type'] ) ? strtoupper( $join_config['type'] ) : 'INNER';
+
+			// Validate join type.
+			if ( ! in_array( $join_type, array( 'INNER', 'LEFT', 'RIGHT' ), true ) ) {
+				$join_type = 'INNER';
+			}
+
+			// Determine the join condition.
+			$local_key   = esc_sql( sanitize_key( $join_config['on'] ) );
+			$foreign_key = ! empty( $join_config['foreign_key'] ) ? esc_sql( sanitize_key( $join_config['foreign_key'] ) ) : 'id';
+
+			// Build the join clause.
+			$this->query_join .= " $join_type JOIN $related_table AS " . esc_sql( $join_alias );
+			$this->query_join .= " ON $table.$local_key = " . esc_sql( $join_alias ) . ".$foreign_key";
+
+			// Register the join alias as a known field source.
+			if ( ! isset( $this->known_fields['joins'] ) ) {
+				$this->known_fields['joins'] = array();
+			}
+
+			$this->known_fields['joins'][ $join_alias ] = $related_collection;
+		}
 	}
 
 	private function get_mysql_timezone_offset() {
@@ -1029,6 +1101,7 @@ class Query {
 			'fields'         => 'all',
 			'aggregate'      => false, // pass an array of property_name and function to aggregate the results.
 			'meta_query'     => array(),
+			'join'           => array(), // pass an array of join aliases to include specific joins.
 		);
 
 		if ( isset( $args['number'] ) ) {
@@ -1048,6 +1121,11 @@ class Query {
 	protected function prepare_known_fields() {
 
 		$this->known_fields = $this->get_collection()->get_known_fields();
+
+		// Initialize joins array.
+		if ( ! isset( $this->known_fields['joins'] ) ) {
+			$this->known_fields['joins'] = array();
+		}
 	}
 
 	/**
@@ -1060,6 +1138,18 @@ class Query {
 		global $wpdb;
 
 		$collection = $this->get_collection();
+
+		// Check for joined table field (format: join_alias.field_name or join_alias__field_name).
+		if ( false !== strpos( $field, '.' ) || false !== strpos( $field, '__' ) ) {
+			$separator = false !== strpos( $field, '.' ) ? '.' : '__';
+			$parts     = explode( $separator, $field, 2 );
+
+			if ( 2 === count( $parts ) && ! empty( $this->known_fields['joins'][ $parts[0] ] ) ) {
+				$join_alias = esc_sql( sanitize_key( $parts[0] ) );
+				$join_field = esc_sql( sanitize_key( $parts[1] ) );
+				return "$join_alias.$join_field";
+			}
+		}
 
 		// Main db table field.
 		if ( in_array( $field, $this->known_fields['main'], true ) || 'id' === strtolower( $field ) ) {

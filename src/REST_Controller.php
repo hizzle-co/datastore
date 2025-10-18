@@ -365,6 +365,10 @@ class REST_Controller extends \WP_REST_Controller {
 								'type'        => array( 'string', 'array' ),
 								'description' => __( 'Optional. Extra fields to include in the response.', 'hizzle-store' ),
 							),
+							'join'         => array(
+								'type'        => array( 'string', 'array' ),
+								'description' => __( 'Optional. Join aliases to include in the query.', 'hizzle-store' ),
+							),
 						)
 					),
 				),
