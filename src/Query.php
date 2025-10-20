@@ -995,26 +995,14 @@ class Query {
 	 *
 	 * @since 1.0.0
 	 * @param array $qv The query vars.
-	 * @param string $table The table name.
-	 * @param bool $is_aggregate Whether this is an aggregate query.
 	 * @global \wpdb $wpdb WordPress database abstraction object.
 	 */
-	public function prepare_orderby_query( $qv, $table = null, $is_aggregate = false ) {
-		$qv['order'] = isset( $qv['order'] ) ? strtoupper( $qv['order'] ) : '';
-		$order       = $this->parse_order( $qv['order'] );
+	public function prepare_orderby_query( $qv ) {
+		// 'order' can be either desc or asc.
+		$order = $this->parse_order( $qv['order'] ?? 'DESC' );
 
-		if ( empty( $qv['orderby'] ) ) {
-			// For aggregate queries, don't default to ordering by 'id'.
-			if ( $is_aggregate ) {
-				$this->query_orderby = '';
-				return;
-			}
-			// Default order is by 'id' for non-aggregate queries.
-			$ordersby = array( 'id' );
-		} else {
-			// 'orderby' values may be a comma- or space-separated list.
-			$ordersby = wp_parse_list( $qv['orderby'] );
-		}
+		// 'orderby' values may be a comma- or space-separated list.
+		$ordersby = wp_parse_list( $qv['orderby'] );
 
 		$orderby_array = array();
 		foreach ( $ordersby as $_key => $_value ) {
@@ -1029,21 +1017,16 @@ class Query {
 			} else {
 				// Non-integer key means this the key is the field and the value is ASC/DESC.
 				$_orderby = $_key;
-				$_order   = $_value;
+				$_order   = $this->parse_order( $_value );
 			}
 
-			$parsed = $this->parse_orderby( $_orderby, $is_aggregate );
+			$parsed = $this->parse_orderby( $_orderby );
 
 			if ( ! $parsed ) {
 				continue;
 			}
 
-			$orderby_array[] = $parsed . ' ' . $this->parse_order( $_order );
-		}
-
-		// If no valid clauses were found, order by ID (but only for non-aggregate queries).
-		if ( empty( $orderby_array ) && ! $is_aggregate ) {
-			$orderby_array[] = "id $order";
+			$orderby_array[] = $parsed . ' ' . $_order;
 		}
 
 		if ( ! empty( $orderby_array ) ) {
