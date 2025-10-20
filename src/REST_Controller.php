@@ -350,7 +350,16 @@ class REST_Controller extends \WP_REST_Controller {
 					'callback'            => array( $this, 'aggregate_items' ),
 					'permission_callback' => array( $this, 'get_items_permissions_check' ),
 					'args'                => array_merge(
-						$collection_params,
+						array_diff_key(
+							$collection_params,
+							array(
+								'paged'    => true,
+								'per_page' => true,
+								'offset'   => true,
+								'order'    => true,
+								'orderby'  => true,
+							)
+						),
 						array(
 							'aggregate'    => array(
 								'type'        => array( 'object' ),
