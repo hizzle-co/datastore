@@ -226,7 +226,7 @@ class Query {
 		global $wpdb;
 
 		$collection        = $this->get_collection();
-		$this->query_limit = null;
+		$this->query_limit = '';
 		$this->query_join  = '';
 		$this->query_vars  = $this->fill_query_vars( $query );
 
@@ -250,7 +250,6 @@ class Query {
 		$this->query_from    = "FROM $table";
 		$this->query_orderby = '';
 		$this->query_groupby = '';
-		$this->query_join    = '';
 
 		// Prepare joins.
 		if ( $collection->is_cpt() ) {
@@ -281,7 +280,7 @@ class Query {
 		}
 
 		// limit.
-		if ( ! $aggregate && isset( $qv['per_page'] ) && (int) $qv['per_page'] > 0 ) {
+		if ( isset( $qv['per_page'] ) && (int) $qv['per_page'] > 0 ) {
 			if ( $qv['offset'] ) {
 				$this->query_limit = $wpdb->prepare( 'LIMIT %d, %d', $qv['offset'], $qv['per_page'] );
 			} else {
