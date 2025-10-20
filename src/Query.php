@@ -276,21 +276,16 @@ class Query {
 		$this->prepare_meta_query( $qv, $table );
 
 		// Sorting.
-		if ( ! $aggregate ) {
-			$this->prepare_orderby_query( $qv, $table );
+		if ( ! empty( $query['orderby'] ) ) {
+			$this->prepare_orderby_query( $qv );
+		}
 
-			// limit
-			if ( isset( $qv['per_page'] ) && (int) $qv['per_page'] > 0 ) {
-				if ( $qv['offset'] ) {
-					$this->query_limit = $wpdb->prepare( 'LIMIT %d, %d', $qv['offset'], $qv['per_page'] );
-				} else {
-					$this->query_limit = $wpdb->prepare( 'LIMIT %d, %d', $qv['per_page'] * ( $qv['page'] - 1 ), $qv['per_page'] );
-				}
-			}
-		} else {
-			// Allow ordering for aggregate queries if explicitly requested.
-			if ( ! empty( $qv['orderby'] ) ) {
-				$this->prepare_orderby_query( $qv, $table, true );
+		// limit.
+		if ( ! $aggregate && isset( $qv['per_page'] ) && (int) $qv['per_page'] > 0 ) {
+			if ( $qv['offset'] ) {
+				$this->query_limit = $wpdb->prepare( 'LIMIT %d, %d', $qv['offset'], $qv['per_page'] );
+			} else {
+				$this->query_limit = $wpdb->prepare( 'LIMIT %d, %d', $qv['per_page'] * ( $qv['page'] - 1 ), $qv['per_page'] );
 			}
 		}
 
@@ -1126,8 +1121,6 @@ class Query {
 			'exclude'        => array(),
 			'search'         => '',
 			'search_columns' => array(),
-			'orderby'        => array( 'id' ),
-			'order'          => 'DESC',
 			'offset'         => '',
 			'per_page'       => -1,
 			'page'           => 1,
@@ -1145,6 +1138,12 @@ class Query {
 
 		if ( ! empty( $args['paged'] ) ) {
 			$args['page'] = $args['paged'];
+		}
+
+		// Default to ordering by ID ascending when not an aggregate query.
+		if ( empty( $args['aggregate'] ) ) {
+			$defaults['orderby'] = array( 'id' );
+			$defaults['order']   = 'DESC';
 		}
 
 		return wp_parse_args( $args, $defaults );
