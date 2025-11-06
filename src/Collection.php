@@ -824,7 +824,7 @@ class Collection {
 
 		foreach ( $data as $key => $value ) {
 
-			$type = strtolower( $this->props[ $key ]->type );
+			$type = strtolower( $this->props[ $key ]->type ?? '' );
 
 			// Handle boolean values.
 			if ( is_bool( $value ) ) {
