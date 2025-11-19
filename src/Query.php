@@ -342,25 +342,20 @@ class Query {
 	private function get_mysql_timezone_offset() {
 		$offset = get_option( 'gmt_offset', 0 );
 
-		// Ensure offset is a float
-		$offset = floatval( $offset );
+		// Ensure offset is a float in minutes
+		$offset = floatval( $offset ) * 60;
 
-		// Get the absolute value of the offset
-		$abs_offset = abs( $offset );
+		if ( 0 > $offset ) {
+			return "DATE_SUB(date_completed, INTERVAL $offset MINUTE)";
+		}
 
-		// Calculate hours and minutes
-		$hours   = floor( $abs_offset );
-		$minutes = ( $abs_offset - $hours ) * 60;
+		if ( 0 < $offset ) {
+			$offset = abs( $offset );
+			return "DATE_ADD(date_completed, INTERVAL $offset MINUTE)";
+		}
 
-		// Format the offset string
-		$offset_string = sprintf(
-			'%s%02d:%02d',
-			$offset >= 0 ? '+' : '-',
-			$hours,
-			$minutes
-		);
-
-		return $offset_string;
+		// If zero offset, return UTC
+		return '%s';
 	}
 
 	/**
@@ -458,7 +453,7 @@ class Query {
 		}
 
 		// Prepare groupby fields.
-		$timezone = esc_sql( $this->get_mysql_timezone_offset() );
+		$timezone_offset = $this->get_mysql_timezone_offset();
 		if ( ! empty( $qv['groupby'] ) ) {
 			foreach ( wp_parse_list( $qv['groupby'] ) as $index => $field ) {
 				$cast = false;
@@ -484,21 +479,26 @@ class Query {
 
 				// Handle casting and timezone conversion
 				if ( $cast ) {
+					// Append cast_ prefix to avoid confusion
+					$field = 'cast_' . $field;
+
+					// Group by date parts with timezone conversion.
+					$local_time_table_field = sprintf( $timezone_offset, $table_field );
 					switch ( $cast ) {
 						case 'hour':
-							$table_field = "DATE_FORMAT(CONVERT_TZ($table_field, '+00:00', '$timezone'), '%Y-%m-%d %H:00:00')";
+							$table_field = "DATE_FORMAT($local_time_table_field, '%Y-%m-%d %H:00:00')";
 							break;
 						case 'day':
-							$table_field = "DATE(CONVERT_TZ($table_field, '+00:00', '$timezone'))";
+							$table_field = "DATE($local_time_table_field)";
 							break;
 						case 'week':
-							$table_field = "DATE(DATE_SUB(CONVERT_TZ($table_field, '+00:00', '$timezone'), INTERVAL WEEKDAY(CONVERT_TZ($table_field, '+00:00', '$timezone')) DAY))";
+							$table_field = "DATE(DATE_SUB($local_time_table_field, INTERVAL WEEKDAY($local_time_table_field) DAY))";
 							break;
 						case 'month':
-							$table_field = "DATE_FORMAT(CONVERT_TZ($table_field, '+00:00', '$timezone'), '%Y-%m-01')";
+							$table_field = "DATE_FORMAT($local_time_table_field, '%Y-%m-01')";
 							break;
 						case 'year':
-							$table_field = "DATE_FORMAT(CONVERT_TZ($table_field, '+00:00', '$timezone'), '%Y-01-01')";
+							$table_field = "DATE_FORMAT($local_time_table_field, '%Y-01-01')";
 							break;
 						default:
 							// If an unsupported cast is provided, just use the field as is
