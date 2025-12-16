@@ -346,12 +346,12 @@ class Query {
 		$offset = floatval( $offset ) * 60;
 
 		if ( 0 > $offset ) {
-			return "DATE_SUB(date_completed, INTERVAL $offset MINUTE)";
+			return "DATE_SUB(%s, INTERVAL $offset MINUTE)";
 		}
 
 		if ( 0 < $offset ) {
 			$offset = abs( $offset );
-			return "DATE_ADD(date_completed, INTERVAL $offset MINUTE)";
+			return "DATE_ADD(%s, INTERVAL $offset MINUTE)";
 		}
 
 		// If zero offset, return UTC
