@@ -500,6 +500,9 @@ class Query {
 						case 'year':
 							$table_field = "DATE_FORMAT($local_time_table_field, '%Y-01-01')";
 							break;
+						case 'day_of_week':
+							$table_field = "DAYOFWEEK($local_time_table_field)";
+							break;
 						default:
 							// If an unsupported cast is provided, just use the field as is
 							$field = esc_sql( $cast );
