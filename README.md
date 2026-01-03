@@ -80,6 +80,28 @@ $query = $collection->query(array(
 
 ## Documentation
 
+### API Reference
+
+Complete documentation for all components is available in the [docs](docs/) folder:
+
+- **Core Classes**
+  - [Store](docs/store.md) - Main store management
+  - [Collection](docs/collection.md) - Collection CRUD operations
+  - [Record](docs/record.md) - Individual record operations
+  - [Query](docs/query.md) - Query builder and filtering
+
+- **Supporting Classes**
+  - [Prop](docs/prop.md) - Property definitions
+  - [REST_Controller](docs/rest-controller.md) - REST API endpoints
+  - [List_Table](docs/list-table.md) - WordPress admin tables
+  - [Webhooks](docs/webhooks.md) - Event-driven webhooks
+
+- **Utilities**
+  - [Date_Time](docs/date-time.md) - Date/time handling
+  - [Store_Exception](docs/store-exception.md) - Exception handling
+
+### Guides
+
 - [JOIN Queries Guide](JOINS.md) - Comprehensive guide to using JOINs
 - [Example Code](example-joins.php) - Working examples with JOINs
 

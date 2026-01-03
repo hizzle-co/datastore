@@ -1,0 +1,4 @@
+theme: jekyll-theme-cayman
+title: Hizzle Datastore
+description: A standardized way of creating data stores for your PHP/WordPress projects
+show_downloads: true
