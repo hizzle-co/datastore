@@ -28,32 +28,75 @@ composer require hizzle/store
 use Hizzle\Store\Store;
 
 // Initialize a store
-Store::init('my_store', array(
-    'customers' => array(
-        'name' => 'customers',
-        'singular_name' => 'customer',
-        'props' => array(
-            'id' => array(
-                'type' => 'int',
-                'length' => 20,
-                'nullable' => false,
+$store = new Store(
+    'my_store',
+    array(
+        'payments' => array(
+            // This object must extend Hizzle\Store\Record
+            'object'        => 'Payment',
+            'singular_name' => 'payment',
+            'props'         => array(
+                'id'                  => array(
+                    'type'        => 'BIGINT',
+                    'length'      => 20,
+                    'nullable'    => false,
+                    'extra'       => 'AUTO_INCREMENT',
+                    'description' => 'Payment ID',
+                ),
+                'customer_id'       => array(
+                    'type'        => 'BIGINT',
+                    'length'      => 20,
+                    'nullable'    => false,
+                    'description' => 'Customer ID',
+                ),
+                /* ... */
             ),
-            'name' => array(
-                'type' => 'varchar',
-                'length' => 255,
-                'nullable' => false,
+            'joins'         => array(
+                'customers' => array(
+                    'collection' => 'my_store_customers',
+                    'on'         => 'customer_id',
+                    'type'       => 'LEFT',
+                ),
+                'plans'     => array(
+                    'collection' => 'my_store_plans',
+                    'on'         => 'plan_id',
+                    'type'       => 'LEFT',
+                ),
+                'products'  => array(
+                    'collection' => 'my_store_products',
+                    // We are assuming that the above payments schema has
+                    // No 'plan_id' property, so we join via plans table
+                    // Which is already joined above
+                    'on'         => 'plans.product_id',
+                    'type'       => 'LEFT',
+                ),
             ),
-            'email' => array(
-                'type' => 'varchar',
-                'length' => 255,
-                'nullable' => false,
+            'keys'          => array(
+                'primary'             => array( 'id' ),
+                'customer_id'         => array( 'customer_id' ),
+                'subscription_id'     => array( 'subscription_id' ),
+                'status'              => array( 'status' ),
+                'date_created_status' => array( 'date_created', 'status' ),
+                'unique'              => array( 'uuid', 'transaction_id' ),
+            ),
+            'labels'        => array(
+                'name'          => __( 'Payments', 'textdomain' ),
+                'singular_name' => __( 'Payment', 'textdomain' ),
+                'add_new'       => __( 'Add New', 'textdomain' ),
+                'add_new_item'  => __( 'Add New Payment', 'textdomain' ),
+                'edit_item'     => __( 'Overview', 'textdomain' ),
+                'new_item'      => __( 'Add Payment', 'textdomain' ),
+                'view_item'     => __( 'View Payment', 'textdomain' ),
+                'view_items'    => __( 'View Payments', 'textdomain' ),
+                'search_items'  => __( 'Search payments', 'textdomain' ),
+                'not_found'     => __( 'No payments found.', 'textdomain' ),
+                'import'        => __( 'Import Payments', 'textdomain' ),
             ),
         ),
-        'keys' => array(
-            'primary' => 'id',
-        ),
-    ),
-));
+        'customers' => array( /* ... */ ),
+        /** Other collections **/
+    )
+);
 ```
 
 ### JOIN Queries (New!)

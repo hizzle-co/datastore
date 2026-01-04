@@ -39,32 +39,43 @@ The Datastore library consists of the following main components:
 use Hizzle\Store\Store;
 
 // Initialize a store
-Store::init('my_store', array(
-    'customers' => array(
-        'name' => 'customers',
-        'singular_name' => 'customer',
-        'props' => array(
-            'id' => array(
-                'type' => 'int',
-                'length' => 20,
-                'nullable' => false,
+$store = new Store(
+    'my_store',
+    array(
+        'customers' => array(
+            'object'        => 'Customer',
+            'singular_name' => 'customer',
+            'props'         => array(
+                'id'    => array(
+                    'type'        => 'BIGINT',
+                    'length'      => 20,
+                    'nullable'    => false,
+                    'extra'       => 'AUTO_INCREMENT',
+                    'description' => 'Customer ID',
+                ),
+                'name'  => array(
+                    'type'        => 'VARCHAR',
+                    'length'      => 255,
+                    'nullable'    => false,
+                    'description' => 'Customer name',
+                ),
+                'email' => array(
+                    'type'        => 'VARCHAR',
+                    'length'      => 255,
+                    'nullable'    => false,
+                    'description' => 'Customer email',
+                ),
             ),
-            'name' => array(
-                'type' => 'varchar',
-                'length' => 255,
-                'nullable' => false,
+            'keys'          => array(
+                'primary' => array( 'id' ),
             ),
-            'email' => array(
-                'type' => 'varchar',
-                'length' => 255,
-                'nullable' => false,
+            'labels'        => array(
+                'name'          => __( 'Customers', 'textdomain' ),
+                'singular_name' => __( 'Customer', 'textdomain' ),
             ),
         ),
-        'keys' => array(
-            'primary' => 'id',
-        ),
-    ),
-));
+    )
+);
 ```
 
 ## Features

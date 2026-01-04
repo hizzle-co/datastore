@@ -240,48 +240,61 @@ $query = $collection->join('orders', array(
 ```php
 use Hizzle\Store\Store;
 
-$store = Store::init('shop', array(
-    'products' => array(
-        'name' => 'products',
-        'singular_name' => 'product',
-        'capabillity' => 'manage_shop',
-        'props' => array(
-            'id' => array(
-                'type' => 'int',
-                'length' => 20,
-                'nullable' => false,
-                'auto_increment' => true,
+$store = new Store(
+    'shop',
+    array(
+        'products' => array(
+            'object'        => 'Product',
+            'singular_name' => 'product',
+            'capability'    => 'manage_shop',
+            'props'         => array(
+                'id'     => array(
+                    'type'        => 'BIGINT',
+                    'length'      => 20,
+                    'nullable'    => false,
+                    'extra'       => 'AUTO_INCREMENT',
+                    'description' => 'Product ID',
+                ),
+                'name'   => array(
+                    'type'        => 'VARCHAR',
+                    'length'      => 255,
+                    'nullable'    => false,
+                    'description' => 'Product name',
+                ),
+                'price'  => array(
+                    'type'        => 'DECIMAL',
+                    'length'      => '10,2',
+                    'default'     => '0.00',
+                    'nullable'    => false,
+                    'description' => 'Product price',
+                ),
+                'stock'  => array(
+                    'type'        => 'INT',
+                    'default'     => 0,
+                    'nullable'    => false,
+                    'description' => 'Stock quantity',
+                ),
+                'status' => array(
+                    'type'        => 'VARCHAR',
+                    'length'      => 20,
+                    'default'     => 'draft',
+                    'enum'        => array( 'draft', 'published', 'archived' ),
+                    'description' => 'Product status',
+                ),
             ),
-            'name' => array(
-                'type' => 'varchar',
-                'length' => 255,
-                'nullable' => false,
-                'label' => 'Product Name',
+            'keys'          => array(
+                'primary' => array( 'id' ),
+                'status'  => array( 'status' ),
             ),
-            'price' => array(
-                'type' => 'decimal',
-                'length' => '10,2',
-                'default' => '0.00',
-                'label' => 'Price',
-            ),
-            'stock' => array(
-                'type' => 'int',
-                'default' => 0,
-                'label' => 'Stock Quantity',
-            ),
-            'status' => array(
-                'type' => 'varchar',
-                'length' => 20,
-                'default' => 'draft',
-                'enum' => array('draft', 'published', 'archived'),
+            'labels'        => array(
+                'name'          => __( 'Products', 'textdomain' ),
+                'singular_name' => __( 'Product', 'textdomain' ),
+                'add_new'       => __( 'Add New', 'textdomain' ),
+                'add_new_item'  => __( 'Add New Product', 'textdomain' ),
             ),
         ),
-        'keys' => array(
-            'primary' => 'id',
-            'index' => array('status'),
-        ),
-    ),
-));
+    )
+);
 
 $products = $store->get_collection('products');
 ```

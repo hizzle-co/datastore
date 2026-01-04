@@ -37,18 +37,44 @@ The REST API is automatically enabled when you create a collection:
 ```php
 use Hizzle\Store\Store;
 
-Store::init('shop', array(
-    'customers' => array(
-        'name' => 'customers',
-        'singular_name' => 'customer',
-        'capabillity' => 'manage_shop', // Required permission
-        'props' => array(
-            'id' => array('type' => 'int', 'nullable' => false),
-            'name' => array('type' => 'varchar', 'length' => 255),
-            'email' => array('type' => 'varchar', 'length' => 255),
+$store = new Store(
+    'shop',
+    array(
+        'customers' => array(
+            'object'        => 'Customer',
+            'singular_name' => 'customer',
+            'capability'    => 'manage_shop', // Required permission
+            'props'         => array(
+                'id'    => array(
+                    'type'        => 'BIGINT',
+                    'length'      => 20,
+                    'nullable'    => false,
+                    'extra'       => 'AUTO_INCREMENT',
+                    'description' => 'Customer ID',
+                ),
+                'name'  => array(
+                    'type'        => 'VARCHAR',
+                    'length'      => 255,
+                    'nullable'    => false,
+                    'description' => 'Customer name',
+                ),
+                'email' => array(
+                    'type'        => 'VARCHAR',
+                    'length'      => 255,
+                    'nullable'    => false,
+                    'description' => 'Customer email',
+                ),
+            ),
+            'keys'          => array(
+                'primary' => array( 'id' ),
+            ),
+            'labels'        => array(
+                'name'          => __( 'Customers', 'textdomain' ),
+                'singular_name' => __( 'Customer', 'textdomain' ),
+            ),
         ),
-    ),
-));
+    )
+);
 
 // REST API is now available at /wp-json/shop/v1/customers
 ```

@@ -18,31 +18,36 @@ When creating a collection, define the `joins` property to specify relationships
 ```php
 use Hizzle\Store\Store;
 
-Store::init(
+$store = new Store(
     'my_store',
     array(
         'customers' => array(
-            'name'          => 'customers',
+            'object'        => 'Customer',
             'singular_name' => 'customer',
             'props'         => array(
-                'id'         => array(
-                    'type'     => 'int',
-                    'length'   => 20,
-                    'nullable' => false,
+                'id'    => array(
+                    'type'        => 'BIGINT',
+                    'length'      => 20,
+                    'nullable'    => false,
+                    'extra'       => 'AUTO_INCREMENT',
+                    'description' => 'Customer ID',
                 ),
-                'name'       => array(
-                    'type'     => 'varchar',
-                    'length'   => 255,
-                    'nullable' => false,
+                'name'  => array(
+                    'type'        => 'VARCHAR',
+                    'length'      => 255,
+                    'nullable'    => false,
+                    'description' => 'Customer name',
                 ),
-                'email'      => array(
-                    'type'     => 'varchar',
-                    'length'   => 255,
-                    'nullable' => false,
+                'email' => array(
+                    'type'        => 'VARCHAR',
+                    'length'      => 255,
+                    'nullable'    => false,
+                    'description' => 'Customer email',
                 ),
             ),
             'keys'          => array(
-                'primary' => 'id',
+                'primary' => array( 'id' ),
+                'email'   => array( 'email' ),
             ),
             // Define JOINs
             'joins'         => array(
@@ -53,34 +58,47 @@ Store::init(
                     'type'        => 'LEFT',               // Optional: INNER, LEFT, or RIGHT
                 ),
             ),
+            'labels'        => array(
+                'name'          => __( 'Customers', 'textdomain' ),
+                'singular_name' => __( 'Customer', 'textdomain' ),
+            ),
         ),
         'payments' => array(
-            'name'          => 'payments',
+            'object'        => 'Payment',
             'singular_name' => 'payment',
             'props'         => array(
                 'id'          => array(
-                    'type'     => 'int',
-                    'length'   => 20,
-                    'nullable' => false,
+                    'type'        => 'BIGINT',
+                    'length'      => 20,
+                    'nullable'    => false,
+                    'extra'       => 'AUTO_INCREMENT',
+                    'description' => 'Payment ID',
                 ),
                 'customer_id' => array(
-                    'type'     => 'int',
-                    'length'   => 20,
-                    'nullable' => false,
+                    'type'        => 'BIGINT',
+                    'length'      => 20,
+                    'nullable'    => false,
+                    'description' => 'Customer ID',
                 ),
                 'amount'      => array(
-                    'type'     => 'decimal',
-                    'length'   => '10,2',
-                    'nullable' => false,
+                    'type'        => 'DECIMAL',
+                    'length'      => '10,2',
+                    'nullable'    => false,
+                    'description' => 'Payment amount',
                 ),
                 'date'        => array(
-                    'type'     => 'datetime',
-                    'nullable' => false,
+                    'type'        => 'DATETIME',
+                    'nullable'    => false,
+                    'description' => 'Payment date',
                 ),
             ),
             'keys'          => array(
-                'primary'     => 'id',
-                'customer_id' => 'customer_id',
+                'primary'     => array( 'id' ),
+                'customer_id' => array( 'customer_id' ),
+            ),
+            'labels'        => array(
+                'name'          => __( 'Payments', 'textdomain' ),
+                'singular_name' => __( 'Payment', 'textdomain' ),
             ),
         ),
     )

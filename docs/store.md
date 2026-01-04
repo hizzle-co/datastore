@@ -116,21 +116,36 @@ use Hizzle\Store\Store;
 
 $store = Store::init('my_store', array(
     'customers' => array(
-        'name' => 'customers',
+        'object'        => 'Customer',
         'singular_name' => 'customer',
-        'props' => array(
-            'id' => array(
-                'type' => 'int',
-                'length' => 20,
-                'nullable' => false,
+        'props'         => array(
+            'id'    => array(
+                'type'        => 'BIGINT',
+                'length'      => 20,
+                'nullable'    => false,
+                'extra'       => 'AUTO_INCREMENT',
+                'description' => 'Customer ID',
             ),
-            'name' => array(
-                'type' => 'varchar',
-                'length' => 255,
+            'name'  => array(
+                'type'        => 'VARCHAR',
+                'length'      => 255,
+                'nullable'    => false,
+                'description' => 'Customer name',
+            ),
+            'email' => array(
+                'type'        => 'VARCHAR',
+                'length'      => 255,
+                'nullable'    => false,
+                'description' => 'Customer email',
             ),
         ),
-        'keys' => array(
-            'primary' => 'id',
+        'keys'          => array(
+            'primary' => array( 'id' ),
+            'email'   => array( 'email' ),
+        ),
+        'labels'        => array(
+            'name'          => __( 'Customers', 'textdomain' ),
+            'singular_name' => __( 'Customer', 'textdomain' ),
         ),
     ),
 ));
@@ -200,29 +215,75 @@ $hook = $store->hook_prefix('before_save'); // Returns: my_store_before_save
 use Hizzle\Store\Store;
 
 // Initialize a simple store
-$store = Store::init('products_store', array(
-    'products' => array(
-        'name' => 'products',
-        'singular_name' => 'product',
-        'props' => array(
-            'id' => array('type' => 'int', 'nullable' => false),
-            'name' => array('type' => 'varchar', 'length' => 255),
-            'price' => array('type' => 'decimal', 'length' => '10,2'),
-            'description' => array('type' => 'text'),
+$store = new Store(
+    'products_store',
+    array(
+        'products' => array(
+            'object'        => 'Product',
+            'singular_name' => 'product',
+            'props'         => array(
+                'id'          => array(
+                    'type'        => 'BIGINT',
+                    'length'      => 20,
+                    'nullable'    => false,
+                    'extra'       => 'AUTO_INCREMENT',
+                    'description' => 'Product ID',
+                ),
+                'name'        => array(
+                    'type'        => 'VARCHAR',
+                    'length'      => 255,
+                    'nullable'    => false,
+                    'description' => 'Product name',
+                ),
+                'price'       => array(
+                    'type'        => 'DECIMAL',
+                    'length'      => '10,2',
+                    'nullable'    => false,
+                    'description' => 'Product price',
+                ),
+                'description' => array(
+                    'type'        => 'TEXT',
+                    'description' => 'Product description',
+                ),
+            ),
+            'keys'          => array(
+                'primary' => array( 'id' ),
+            ),
+            'labels'        => array(
+                'name'          => __( 'Products', 'textdomain' ),
+                'singular_name' => __( 'Product', 'textdomain' ),
+            ),
         ),
-        'keys' => array('primary' => 'id'),
-    ),
-));
+    )
+);
 ```
 
 ### Multiple Collections
 
 ```php
-$store = Store::init('ecommerce', array(
-    'products' => array(/* ... */),
-    'customers' => array(/* ... */),
-    'orders' => array(/* ... */),
-));
+$store = new Store(
+    'ecommerce',
+    array(
+        'products'  => array(
+            'object'        => 'Product',
+            'singular_name' => 'product',
+            'props'         => array( /* ... */ ),
+            'keys'          => array( 'primary' => array( 'id' ) ),
+        ),
+        'customers' => array(
+            'object'        => 'Customer',
+            'singular_name' => 'customer',
+            'props'         => array( /* ... */ ),
+            'keys'          => array( 'primary' => array( 'id' ) ),
+        ),
+        'orders'    => array(
+            'object'        => 'Order',
+            'singular_name' => 'order',
+            'props'         => array( /* ... */ ),
+            'keys'          => array( 'primary' => array( 'id' ) ),
+        ),
+    )
+);
 
 // Access individual collections
 $products = $store->get_collection('products');
