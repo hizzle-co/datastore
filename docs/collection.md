@@ -147,12 +147,11 @@ Creates a new query for this collection.
 
 **Example:**
 ```php
-// Simple query
+// Query with field filtering
 $query = $collection->query(array(
-    'where' => array(
-        array('email', 'LIKE', '%@example.com'),
-    ),
-    'limit' => 10,
+    'email' => 'john@example.com',
+    'status' => 'active',
+    'per_page' => 10,
 ));
 
 $results = $query->get_results();
@@ -170,9 +169,7 @@ Counts records matching the query.
 **Example:**
 ```php
 $total = $collection->count(array(
-    'where' => array(
-        array('status', '=', 'active'),
-    ),
+    'status' => 'active',
 ));
 ```
 
@@ -329,16 +326,15 @@ $products->delete($product_id);
 ### Advanced Queries
 
 ```php
-// Complex query with multiple conditions
+// Complex query with multiple field filters
 $query = $products->query(array(
-    'where' => array(
-        array('status', '=', 'published'),
-        array('price', '>', 10),
-        array('stock', '>', 0),
-    ),
+    'status' => 'published',
+    'price_min' => 10,
+    'stock' => 0,
+    'stock_not' => 0, // Ensure stock is not zero
     'orderby' => array('price' => 'DESC'),
-    'limit' => 20,
-    'offset' => 0,
+    'per_page' => 20,
+    'page' => 1,
 ));
 
 $results = $query->get_results();
@@ -350,7 +346,43 @@ foreach ($results as $product) {
 $total = $query->get_total();
 ```
 
-### Using Meta Fields
+### Additional Collection Methods
+
+#### Get Record by Property
+
+```php
+// Get ID by a specific property value
+$product_id = $products->get_id_by_prop('sku', 'WIDGET-001');
+
+if ($product_id) {
+    $product = $products->get($product_id);
+}
+```
+
+#### Check if Record Exists
+
+```php
+if ($products->exists($product_id)) {
+    // Product exists
+}
+```
+
+#### Bulk Delete Operations
+
+```php
+// Delete all records matching criteria
+$deleted_count = $products->delete_where(array(
+    'status' => 'draft',
+    'stock' => 0,
+));
+
+echo "Deleted {$deleted_count} products";
+
+// Delete all records (use with extreme caution!)
+$products->delete_all();
+```
+
+### Working with Record Metadata
 
 ```php
 // Enable meta table in collection config
@@ -359,20 +391,30 @@ $total = $query->get_total();
     // ... other config
 )
 
-// Add meta data to a product
-$product = $products->get($product_id);
-$product->update_meta('custom_field', 'value');
+// Add metadata
+$products->add_record_meta($product_id, 'featured', '1');
+$products->add_record_meta($product_id, 'gallery', array('image1.jpg', 'image2.jpg'));
 
-// Query by meta
-$query = $products->query(array(
-    'meta_query' => array(
-        array(
-            'key' => 'custom_field',
-            'value' => 'value',
-            'compare' => '=',
-        ),
-    ),
-));
+// Get metadata
+$featured = $products->get_record_meta($product_id, 'featured', true);
+$gallery = $products->get_record_meta($product_id, 'gallery', true);
+
+// Update metadata
+$products->update_record_meta($product_id, 'featured', '0');
+
+// Delete metadata
+$products->delete_record_meta($product_id, 'featured');
+
+// Delete all metadata for a record
+$products->delete_all_record_meta($product_id);
+
+// Check if metadata exists
+if ($products->record_meta_exists($product_id, 'featured')) {
+    // Metadata exists
+}
+
+// Delete all metadata by key across all records
+$products->delete_all_meta('old_field');
 ```
 
 ## Hooks and Filters

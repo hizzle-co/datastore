@@ -300,6 +300,159 @@ if ($store) {
 }
 ```
 
+## Creating a Database Wrapper Class
+
+For easier access to your store's collections, you can create a helper class that wraps common operations:
+
+```php
+namespace MyApp;
+
+use Hizzle\Store\Store;
+
+class DB {
+
+    /**
+     * Get active instance
+     */
+    public static function instance() {
+        return Store::instance('my_store');
+    }
+
+    /**
+     * Retrieves a record from the database.
+     *
+     * @param \Hizzle\Store\Record|int $record_id The record ID
+     * @param string $collection_name The collection name
+     * @return \Hizzle\Store\Record|\WP_Error record object if found, error if not
+     */
+    public static function get($record_id, $collection_name = 'customers') {
+        
+        // No need to refetch if already a Record object
+        if (is_a($record_id, '\Hizzle\Store\Record')) {
+            return $record_id;
+        }
+
+        if (is_wp_error($record_id)) {
+            return $record_id;
+        }
+
+        try {
+            $collection = self::instance()->get($collection_name);
+            
+            if (empty($collection)) {
+                return new \WP_Error(
+                    'invalid_collection',
+                    sprintf('Invalid collection: %s', $collection_name)
+                );
+            }
+
+            return $collection->get((int) $record_id);
+            
+        } catch (\Hizzle\Store\Store_Exception $e) {
+            return new \WP_Error(
+                $e->getErrorCode(),
+                $e->getMessage(),
+                $e->getErrorData()
+            );
+        }
+    }
+
+    /**
+     * Get ID by a specific property value
+     */
+    public static function get_id_by_prop($prop, $value, $collection_name = 'customers') {
+        $collection = self::instance()->get($collection_name);
+        return empty($collection) ? false : $collection->get_id_by_prop($prop, $value);
+    }
+
+    /**
+     * Delete records matching criteria
+     */
+    public static function delete_where($where, $collection_name = 'customers') {
+        $collection = self::instance()->get($collection_name);
+        return empty($collection) ? false : $collection->delete_where($where);
+    }
+
+    /**
+     * Query records from the database
+     *
+     * @param string $collection_name The collection name
+     * @param array $args Query arguments
+     * @param string $return 'results', 'count', 'aggregate', or 'query'
+     * @return int|array|\Hizzle\Store\Record[]|\Hizzle\Store\Query|\WP_Error
+     */
+    public static function query($collection_name, $args = array(), $return = 'results') {
+        
+        // Optimize query based on return type
+        if ('count' === $return) {
+            $args['count_only'] = true;
+        }
+
+        if ('results' === $return) {
+            $args['count_total'] = false;
+        }
+
+        try {
+            $collection = self::instance()->get($collection_name);
+            
+            if (empty($collection)) {
+                return new \WP_Error(
+                    'invalid_collection',
+                    sprintf('Invalid collection: %s', $collection_name)
+                );
+            }
+
+            $query = $collection->query($args);
+
+            if ('results' === $return) {
+                return $query->get_results();
+            }
+
+            if ('count' === $return) {
+                return $query->get_total();
+            }
+
+            if ('aggregate' === $return) {
+                return $query->get_aggregate();
+            }
+
+            return $query;
+            
+        } catch (\Hizzle\Store\Store_Exception $e) {
+            return new \WP_Error(
+                $e->getErrorCode(),
+                $e->getMessage(),
+                $e->getErrorData()
+            );
+        }
+    }
+
+    /**
+     * Metadata operations
+     */
+    public static function get_record_meta($record_id, $meta_key = '', $single = false, $collection = 'customers') {
+        $col = self::instance()->get($collection);
+        return empty($col) ? false : $col->get_record_meta($record_id, $meta_key, $single);
+    }
+
+    public static function update_record_meta($record_id, $meta_key, $meta_value, $prev_value = '', $collection = 'customers') {
+        $col = self::instance()->get($collection);
+        return empty($col) ? false : $col->update_record_meta($record_id, $meta_key, $meta_value, $prev_value);
+    }
+
+    public static function delete_record_meta($record_id, $meta_key, $meta_value = '', $collection = 'customers') {
+        $col = self::instance()->get($collection);
+        return empty($col) ? false : $col->delete_record_meta($record_id, $meta_key, $meta_value);
+    }
+}
+
+// Usage examples
+$customer = DB::get(123, 'customers');
+$customers = DB::query('customers', array('status' => 'active'));
+$count = DB::query('customers', array('status' => 'active'), 'count');
+$customer_id = DB::get_id_by_prop('email', 'john@example.com', 'customers');
+```
+
 ## Hooks and Filters
 
 The Store class provides WordPress hooks for extensibility:

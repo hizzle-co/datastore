@@ -99,7 +99,156 @@ $store = new Store(
 );
 ```
 
-### JOIN Queries (New!)
+### Working with Records
+
+#### Create Records
+
+```php
+// Get the collection
+$collection = Store::instance('my_store')->get('payments');
+
+// Create a new payment
+$payment = $collection->create(array(
+    'customer_id' => 123,
+    'amount' => 99.99,
+    'status' => 'completed',
+));
+
+// Get the payment ID
+$payment_id = $payment->get_id();
+```
+
+#### Read Records
+
+```php
+// Get a single record by ID
+$payment = $collection->get($payment_id);
+
+if ($payment) {
+    echo $payment->get('amount'); // 99.99
+    echo $payment->get('status'); // completed
+}
+
+// Get ID by a specific property
+$payment_id = $collection->get_id_by_prop('transaction_id', 'txn_abc123');
+
+// Check if a record exists
+if ($collection->exists($payment_id)) {
+    // Record exists
+}
+```
+
+#### Update Records
+
+```php
+// Update a record
+$collection->update($payment_id, array(
+    'status' => 'refunded',
+    'refund_date' => current_time('mysql'),
+));
+
+// Or update via the record object
+$payment = $collection->get($payment_id);
+$payment->set('status', 'refunded');
+$payment->save();
+```
+
+#### Delete Records
+
+```php
+// Delete a single record
+$collection->delete($payment_id);
+
+// Delete records matching criteria
+$deleted = $collection->delete_where(array(
+    'status' => 'pending',
+    'customer_id' => 123,
+));
+
+// Delete all records (use with caution!)
+$collection->delete_all();
+```
+
+### Querying Records
+
+```php
+// Basic query
+$query = $collection->query(array(
+    'status' => 'completed',
+    'customer_id' => 123,
+    'per_page' => 10,
+    'page' => 1,
+));
+
+$payments = $query->get_results();
+$total = $query->get_total();
+
+// Count records
+$count = $collection->count(array(
+    'status' => 'completed',
+));
+
+// Aggregate query
+$results = $collection->aggregate(array(
+    'aggregate' => array(
+        'amount' => array('SUM', 'AVG', 'COUNT'),
+    ),
+    'groupby' => 'status',
+));
+
+// Complex query with date filters
+$payments = $collection->query(array(
+    'status' => array('completed', 'pending'),
+    'amount_min' => 50,
+    'date_created_after' => '2026-01-01',
+    'orderby' => 'date_created',
+    'order' => 'DESC',
+))->get_results();
+```
+
+### Working with Metadata
+
+```php
+// Add meta data
+$collection->add_record_meta($payment_id, 'gateway', 'stripe');
+
+// Get meta data
+$gateway = $collection->get_record_meta($payment_id, 'gateway', true);
+
+// Update meta data
+$collection->update_record_meta($payment_id, 'gateway', 'paypal');
+
+// Delete meta data
+$collection->delete_record_meta($payment_id, 'gateway');
+
+// Check if meta exists
+if ($collection->record_meta_exists($payment_id, 'gateway')) {
+    // Meta exists
+}
+```
+
+### Error Handling
+
+```php
+try {
+    $collection = Store::instance('my_store')->get('payments');
+    $payment = $collection->get($payment_id);
+    
+    // Do something with the payment
+    
+} catch (\Hizzle\Store\Store_Exception $e) {
+    error_log($e->getMessage());
+    
+    // Or convert to WP_Error
+    $error = new WP_Error(
+        $e->getErrorCode(),
+        $e->getMessage(),
+        $e->getErrorData()
+    );
+}
+```
+
+### JOIN Queries
 
 Define relationships between collections:
 
