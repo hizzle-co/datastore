@@ -34,12 +34,13 @@ Provides a fluent interface for building and executing database queries against 
 
 ### Advanced Query Args
 
-- `aggregate` (array) - Aggregate functions to perform
-- `groupby` (string|array) - Fields to group by
+- `aggregate` (array) - Aggregate functions to perform (supports string, array, or complex configuration)
+- `groupby` (string|array) - Fields to group by (supports casting for date fields)
 - `having` (array) - HAVING clause for aggregates
 - `join` (array) - JOIN operations to perform
-- `meta_query` (array) - Query by metadata
+- `meta_query` (array) - Query by metadata (uses WP_Meta_Query format)
 - `search` (string) - Search term
+- `extra_fields` (array) - Additional fields to include in aggregate results without aggregating
 
 ## Main Methods
 
@@ -201,6 +202,8 @@ $ids = $query->get_ids();
 
 ### Aggregate Functions
 
+#### Basic Aggregates
+
 ```php
 // COUNT
 $count = $products->count(array(
@@ -215,7 +218,7 @@ $result = $products->aggregate(array(
         'price' => 'SUM',
     ),
 ));
-$total_value = $result['price_sum'];
+$total_value = $result[0]['price_sum'];
 
 // Multiple aggregates
 $result = $products->aggregate(array(
@@ -227,16 +230,173 @@ $result = $products->aggregate(array(
 
 // Returns:
 // array(
-//     'price_sum' => 5000.00,
-//     'price_avg' => 50.00,
-//     'price_min' => 10.00,
-//     'price_max' => 200.00,
-//     'stock_sum' => 1000,
-//     'stock_count' => 100,
+//     array(
+//         'price_sum' => 5000.00,
+//         'price_avg' => 50.00,
+//         'price_min' => 10.00,
+//         'price_max' => 200.00,
+//         'stock_sum' => 1000,
+//         'stock_count' => 100,
+//     )
 // )
 ```
 
+#### Advanced Aggregate Configurations
+
+You can use array configurations for more control over aggregate functions:
+
+```php
+// Custom alias and expression
+$result = $products->aggregate(array(
+    'aggregate' => array(
+        'price' => array(
+            array(
+                'function' => 'SUM',
+                'as' => 'total_revenue',
+                'expression' => 'price * 1.1', // Add 10% markup
+            ),
+            array(
+                'function' => 'AVG',
+                'as' => 'avg_discounted_price',
+                'expression' => 'price * discount_field', // Apply 10% discount
+            ),
+        ),
+    ),
+));
+
+// Returns:
+// array(
+//     array(
+//         'total_revenue' => 5500.00,
+//         'avg_discounted_price' => 45.00,
+//     )
+// )
+```
+
+#### CASE Expressions in Aggregates
+
+CASE expressions allow conditional aggregation:
+
+```php
+// Calculate revenue by product status
+$result = $products->aggregate(array(
+    'aggregate' => array(
+        'active_revenue' => array(
+            'case' => array(
+                'field' => 'status',
+                'when' => array(
+                    'active' => array(
+                        'field' => 'price',
+                        'value' => '{field}',
+                    ),
+                ),
+                'else' => 0,
+            ),
+            'function' => 'SUM',
+        ),
+        'inactive_count' => array(
+            'case' => array(
+                'field' => 'status',
+                'when' => array(
+                    'inactive' => 1,
+                ),
+                'else' => 0,
+            ),
+            'function' => 'SUM',
+        ),
+    ),
+));
+
+// More complex CASE with calculations
+$result = $products->aggregate(array(
+    'aggregate' => array(
+        'premium_revenue' => array(
+            'case' => array(
+                'field' => 'category',
+                'when' => array(
+                    'premium' => array(
+                        'field' => 'price',
+                        'value' => '{field} * quantity * 1.2', // 20% premium markup
+                    ),
+                    'standard' => array(
+                        'field' => 'price',
+                        'value' => '{field} * quantity',
+                    ),
+                ),
+                'else' => array(
+                    'field' => 'price',
+                    'value' => '{field} * quantity * 0.8', // 20% discount for other
+                ),
+            ),
+            'function' => 'SUM',
+        ),
+    ),
+));
+
+// CASE with math operations after aggregation
+$result = $products->aggregate(array(
+    'aggregate' => array(
+        'weighted_value' => array(
+            'case' => array(
+                'field' => 'status',
+                'when' => array(
+                    'active' => array(
+                        'field' => 'price',
+                    ),
+                ),
+                'else' => 0,
+            ),
+            'function' => 'SUM',
+            'math' => '/ 100', // Divide the sum by 100
+        ),
+    ),
+));
+```
+
+#### Math Expressions
+
+Math expressions support various operators and SQL functions:
+
+```php
+// Basic arithmetic
+$result = $products->aggregate(array(
+    'aggregate' => array(
+        'total_value' => array(
+            array(
+                'function' => 'SUM',
+                'expression' => '{field} * quantity',
+                'as' => 'inventory_value',
+            ),
+        ),
+    ),
+));
+
+// Complex calculations with SQL functions
+$result = $products->aggregate(array(
+    'aggregate' => array(
+        'price' => array(
+            array(
+                'function' => 'AVG',
+                'expression' => 'ROUND({field} * 1.15, 2)', // 15% markup, rounded
+                'as' => 'avg_retail_price',
+            ),
+            array(
+                'function' => 'SUM',
+                'expression' => 'ABS({field} - cost_price)', // Absolute difference
+                'as' => 'total_margin',
+            ),
+        ),
+    ),
+));
+
+// Supported SQL functions in expressions:
+// ABS, ROUND, CEIL, FLOOR, SQRT, POW
+// Supported operators: +, -, *, /
+```
+
 ### GROUP BY with Aggregates
+
+#### Basic Grouping
 
 ```php
 // Group by category and sum prices
@@ -256,6 +416,125 @@ foreach ($results as $row) {
 }
 ```
 
+#### Date Grouping with Casting
+
+Group by date periods with automatic timezone conversion:
+
+```php
+// Group by day
+$results = $products->aggregate(array(
+    'aggregate' => array(
+        'price' => 'SUM',
+        'id' => 'COUNT',
+    ),
+    'groupby' => array(
+        'created_at' => 'day',
+    ),
+));
+
+// Returns:
+// array(
+//     array('cast_created_at' => '2026-01-01', 'price_sum' => 100, 'id_count' => 5),
+//     array('cast_created_at' => '2026-01-02', 'price_sum' => 150, 'id_count' => 7),
+// )
+
+// Group by hour
+$results = $products->aggregate(array(
+    'aggregate' => array(
+        'id' => 'COUNT',
+    ),
+    'groupby' => array(
+        'created_at' => 'hour',
+    ),
+));
+
+// Group by week (normalized to Monday)
+$results = $products->aggregate(array(
+    'aggregate' => array(
+        'price' => 'SUM',
+    ),
+    'groupby' => array(
+        'created_at' => 'week',
+    ),
+));
+
+// Group by month
+$results = $products->aggregate(array(
+    'aggregate' => array(
+        'price' => 'SUM',
+    ),
+    'groupby' => array(
+        'created_at' => 'month',
+    ),
+));
+
+// Group by year
+$results = $products->aggregate(array(
+    'aggregate' => array(
+        'price' => 'SUM',
+    ),
+    'groupby' => array(
+        'created_at' => 'year',
+    ),
+));
+
+// Group by day of week (0=Monday, 6=Sunday)
+$results = $products->aggregate(array(
+    'aggregate' => array(
+        'id' => 'COUNT',
+    ),
+    'groupby' => array(
+        'created_at' => 'day_of_week',
+    ),
+));
+
+// Supported cast types:
+// - 'hour': Groups by hour (e.g., '2026-01-01 14:00:00')
+// - 'day': Groups by day (e.g., '2026-01-01')
+// - 'week': Groups by week, normalized to Monday (e.g., '2025-12-29')
+// - 'month': Groups by month (e.g., '2026-01-01')
+// - 'year': Groups by year (e.g., '2026-01-01')
+// - 'day_of_week': Groups by weekday number (0-6, where 0=Monday)
+
+// Multiple group by fields
+$results = $products->aggregate(array(
+    'aggregate' => array(
+        'price' => 'SUM',
+    ),
+    'groupby' => array(
+        'created_at' => 'day',
+        'category',
+    ),
+));
+```
+
+### Extra Fields in Aggregates
+
+Include additional fields in aggregate queries without aggregating them:
+
+```php
+// Include category name without aggregating it
+$results = $products->aggregate(array(
+    'aggregate' => array(
+        'price' => 'SUM',
+        'id' => 'COUNT',
+    ),
+    'groupby' => 'category',
+    'extra_fields' => array('category', 'status'),
+));
+
+// Returns:
+// array(
+//     array(
+//         'category' => 'electronics',
+//         'status' => 'active',
+//         'price_sum' => 5000,
+//         'id_count' => 50,
+//     ),
+//     ...
+// )
+```
+
 ### HAVING Clause
 
 ```php
@@ -267,6 +546,21 @@ $results = $products->aggregate(array(
     'groupby' => 'category',
     'having' => array(
         array('id_count', '>', 10),
+    ),
+));
+
+// Complex HAVING conditions
+$results = $products->aggregate(array(
+    'aggregate' => array(
+        'price' => array('SUM', 'AVG'),
+        'id' => 'COUNT',
+    ),
+    'groupby' => 'category',
+    'having' => array(
+        'relation' => 'AND',
+        array('id_count', '>', 10),
+        array('price_sum', '>', 1000),
+        array('price_avg', '<', 100),
     ),
 ));
 ```
@@ -282,13 +576,14 @@ $results = $products->aggregate(array(
             'collection' => 'shop_orders',
             'on' => 'id',
             'foreign_key' => 'customer_id',
-            'type' => 'LEFT',
+            'type' => 'LEFT', // Supported: INNER, LEFT, RIGHT
         ),
     ),
     // ... other config
 )
 
 // Use the JOIN in a query
+// Note: If any JOIN is LEFT, all JOINs automatically become LEFT
 $query = $customers->query(array(
     'join' => array('orders'),
     'aggregate' => array(
@@ -302,6 +597,15 @@ foreach ($results as $customer) {
     echo "{$customer->get('name')}: ";
     echo "{$customer->orders_total_sum} from {$customer->orders_total_count} orders\n";
 }
+
+// You can also use double underscore (__) instead of dot (.)
+$query = $customers->query(array(
+    'join' => array('orders'),
+    'aggregate' => array(
+        'orders__total' => array('SUM', 'COUNT'),
+    ),
+    'groupby' => 'id',
+));
 ```
 
 ### Multiple JOINs
@@ -435,9 +739,18 @@ $count = $collection->count($args);
 ### Aggregate Query
 
 ```php
-$result = $collection->aggregate($args);
-// Returns: Array with aggregate results
-// Example: array('price_sum' => 1000, 'price_avg' => 50)
+$results = $collection->aggregate($args);
+// Returns: Array of result rows with aggregate values
+// Example without GROUP BY:
+// array(
+//     array('price_sum' => 1000, 'price_avg' => 50)
+// )
+//
+// Example with GROUP BY:
+// array(
+//     array('category' => 'electronics', 'price_sum' => 5000, 'id_count' => 50),
+//     array('category' => 'clothing', 'price_sum' => 3000, 'id_count' => 75),
+// )
 ```
 
 ## Performance Tips
@@ -450,13 +763,32 @@ $result = $collection->aggregate($args);
 2. **Use count** instead of fetching all records:
    ```php
    $total = $collection->count($args);
+   // Or use count_only in query
+   $query = $collection->query(array(
+       'count_only' => true,
+       'where' => array(...),
+   ));
+   $total = $query->get_total();
    ```
 
-3. **Add indexes** to frequently queried fields in your collection schema
+3. **Disable total count** when you don't need it:
+   ```php
+   'count_total' => false, // Skips the extra COUNT query
+   ```
 
-4. **Limit results** to avoid memory issues with large datasets
+4. **Add indexes** to frequently queried fields in your collection schema
 
-5. **Use aggregate queries** instead of fetching all records and calculating in PHP
+5. **Limit results** to avoid memory issues with large datasets:
+   ```php
+   'per_page' => 50,
+   'page' => 1,
+   ```
+
+6. **Use aggregate queries** instead of fetching all records and calculating in PHP
+
+7. **Be cautious with JOINs** - if any JOIN is LEFT, all JOINs become LEFT automatically
+
+8. **Use CASE expressions** in aggregates instead of multiple queries for conditional calculations
 
 ## See Also
 

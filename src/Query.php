@@ -492,6 +492,12 @@ class Query {
 							$table_field = "DATE($local_time_table_field)";
 							break;
 						case 'week':
+							// Normalize the date to the Monday of the same week
+							// WEEKDAY($local_time_table_field) returns a number from 0 to 6, where Monday is 0 and Sunday is 6.
+							// This tells us how many days have passed since Monday for that date.
+							// DATE_SUB($local_time_table_field, INTERVAL WEEKDAY($local_time_table_field) DAY) subtracts that many days from the original date.
+							// The result is the Monday of the week that $local_time_table_field falls in.
+							// DATE(...) then strips off any time component and returns just the date.
 							$table_field = "DATE(DATE_SUB($local_time_table_field, INTERVAL WEEKDAY($local_time_table_field) DAY))";
 							break;
 						case 'month':
@@ -501,7 +507,9 @@ class Query {
 							$table_field = "DATE_FORMAT($local_time_table_field, '%Y-01-01')";
 							break;
 						case 'day_of_week':
-							$table_field = "DAYOFWEEK($local_time_table_field)";
+							// WEEKDAY(date) returns an integer from 0 to 6, where:
+							// 0 === Monday and 6 === Sunday
+							$table_field = "WEEKDAY($local_time_table_field)";
 							break;
 						default:
 							// If an unsupported cast is provided, just use the field as is
