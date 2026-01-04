@@ -58,11 +58,11 @@ class Main {
 	/**
 	 * Retrieves a record from the database.
 	 *
-	 * @param Record|int $record_id The record ID.
+	 * @param Record|int|array $record_id The record ID, object, or props. Leave blank to create a new record.
 	 * @param string $collection_name The collection name.
 	 * @return Record|\WP_Error record object if found, error object if not found.
 	 */
-	public function get( $record_id, $collection_name ) {
+	public function get( $collection_name, $record_id = 0 ) {
 
 		// Abort if we already have an error.
 		if ( is_wp_error( $record_id ) ) {
@@ -80,6 +80,12 @@ class Main {
 
 			if ( empty( $collection ) ) {
 				return new \WP_Error( 'invalid_collection', sprintf( 'Invalid collection: %s', $collection_name ) );
+			}
+
+			if ( is_array( $record_id ) ) {
+				$record = $collection->get( 0 );
+				$record->set_props( $record_id );
+				return $record;
 			}
 
 			return $collection->get( (int) $record_id );

@@ -22,7 +22,68 @@ composer require hizzle/store
 
 ## Quick Start
 
-### Basic Usage
+### Recommended: Using Main Class
+
+The `Main` class provides a simplified API for interacting with your store:
+
+```php
+use Hizzle\Store\Main;
+
+// Get or create store instance
+$db = Main::instance('my_store');
+
+// Initialize store with collections
+$db->init_store(
+    array(
+        'orders' => array(
+            'object'        => 'Order',
+            'singular_name' => 'order',
+            'props'         => array(
+                'id'          => array(
+                    'type'        => 'BIGINT',
+                    'length'      => 20,
+                    'nullable'    => false,
+                    'extra'       => 'AUTO_INCREMENT',
+                    'description' => 'Order ID',
+                ),
+                'customer_id' => array(
+                    'type'        => 'BIGINT',
+                    'length'      => 20,
+                    'nullable'    => false,
+                    'description' => 'Customer ID',
+                ),
+                'total'       => array(
+                    'type'        => 'DECIMAL',
+                    'length'      => '10,2',
+                    'nullable'    => false,
+                    'description' => 'Order total',
+                ),
+                'status'      => array(
+                    'type'        => 'VARCHAR',
+                    'length'      => 20,
+                    'default'     => 'pending',
+                    'description' => 'Order status',
+                ),
+            ),
+            'keys'          => array(
+                'primary'     => array( 'id' ),
+                'customer_id' => array( 'customer_id' ),
+                'status'      => array( 'status' ),
+            ),
+            'labels'        => array(
+                'name'          => __( 'Orders', 'textdomain' ),
+                'singular_name' => __( 'Order', 'textdomain' ),
+            ),
+        ),
+    )
+);
+
+// Work with records
+$order = $db->get('orders', 123);
+$orders = $db->query('orders', array('status' => 'completed'));
+```
+
+### Alternative: Using Store Class Directly
 
 ```php
 use Hizzle\Store\Store;
@@ -104,7 +165,10 @@ $store = new Store(
 #### Create Records
 
 ```php
-// Get the collection
+// Using Main class (recommended)
+$db = Main::instance('my_store');
+
+// Get the collection first
 $collection = Store::instance('my_store')->get('payments');
 
 // Create a new payment
@@ -121,16 +185,24 @@ $payment_id = $payment->get_id();
 #### Read Records
 
 ```php
-// Get a single record by ID
-$payment = $collection->get($payment_id);
+// Using Main class (recommended)
+$db = Main::instance('my_store');
 
-if ($payment) {
+// Get a single record by ID
+$payment = $db->get('payments', $payment_id);
+
+if ($payment && !is_wp_error($payment)) {
     echo $payment->get('amount'); // 99.99
     echo $payment->get('status'); // completed
 }
 
 // Get ID by a specific property
-$payment_id = $collection->get_id_by_prop('transaction_id', 'txn_abc123');
+$payment_id = $db->get_id_by_prop('transaction_id', 'txn_abc123', 'payments');
+
+// Using Collection directly
+// Throws \Hizzle\Store\Store_Exception on failure
+$collection = Store::instance('my_store')->get('payments');
+$payment = $collection->get($payment_id);
 
 // Check if a record exists
 if ($collection->exists($payment_id)) {
@@ -141,38 +213,87 @@ if ($collection->exists($payment_id)) {
 #### Update Records
 
 ```php
-// Update a record
+// Get the record using Main class
+$db = Main::instance('my_store');
+$payment = $db->get('payments', $payment_id);
+
+if ($payment && !is_wp_error($payment)) {
+    $payment->set('status', 'refunded');
+    $payment->set('refund_date', current_time('mysql'));
+    $payment->save();
+}
+
+// Or update via collection
+// Throws \Hizzle\Store\Store_Exception on failure
+$collection = Store::instance('my_store')->get('payments');
 $collection->update($payment_id, array(
     'status' => 'refunded',
     'refund_date' => current_time('mysql'),
 ));
-
-// Or update via the record object
-$payment = $collection->get($payment_id);
-$payment->set('status', 'refunded');
-$payment->save();
 ```
 
 #### Delete Records
 
 ```php
-// Delete a single record
-$collection->delete($payment_id);
+// Using Main class (recommended)
+$db = Main::instance('my_store');
 
 // Delete records matching criteria
-$deleted = $collection->delete_where(array(
-    'status' => 'pending',
-    'customer_id' => 123,
-));
+$deleted = $db->delete_where(
+    array(
+        'status' => 'pending',
+        'customer_id' => 123,
+    ),
+    'payments'
+);
 
 // Delete all records (use with caution!)
-$collection->delete_all();
+$db->delete_all('payments');
+
+// Or delete via record object
+$payment = $db->get('payments', $payment_id);
+if ($payment && !is_wp_error($payment)) {
+    $payment->delete();
+}
 ```
 
 ### Querying Records
 
 ```php
-// Basic query
+// Using Main class (recommended)
+$db = Main::instance('my_store');
+
+// Basic query - returns results
+$payments = $db->query('payments', array(
+    'status' => 'completed',
+    'customer_id' => 123,
+    'per_page' => 10,
+    'page' => 1,
+));
+
+// Count records
+$count = $db->query('payments', array(
+    'status' => 'completed',
+), 'count');
+
+// Aggregate query
+$results = $db->query('payments', array(
+    'aggregate' => array(
+        'amount' => array('SUM', 'AVG', 'COUNT'),
+    ),
+    'groupby' => 'status',
+), 'aggregate');
+
+// Get Query object for more control
+$query = $db->query('payments', array(
+    'status' => 'completed',
+), 'query');
+
+$payments = $query->get_results();
+$total = $query->get_total();
+
+// Using Collection directly
+$collection = Store::instance('my_store')->get('payments');
 $query = $collection->query(array(
     'status' => 'completed',
     'customer_id' => 123,
@@ -183,53 +304,70 @@ $query = $collection->query(array(
 $payments = $query->get_results();
 $total = $query->get_total();
 
-// Count records
-$count = $collection->count(array(
-    'status' => 'completed',
-));
-
-// Aggregate query
-$results = $collection->aggregate(array(
-    'aggregate' => array(
-        'amount' => array('SUM', 'AVG', 'COUNT'),
-    ),
-    'groupby' => 'status',
-));
-
 // Complex query with date filters
-$payments = $collection->query(array(
+$payments = $db->query('payments', array(
     'status' => array('completed', 'pending'),
     'amount_min' => 50,
     'date_created_after' => '2026-01-01',
     'orderby' => 'date_created',
     'order' => 'DESC',
-))->get_results();
+));
 ```
 
 ### Working with Metadata
 
 ```php
+// Using Main class (recommended)
+$db = Main::instance('my_store');
+
 // Add meta data
-$collection->add_record_meta($payment_id, 'gateway', 'stripe');
+$db->add_record_meta($payment_id, 'gateway', 'stripe', false, 'payments');
 
 // Get meta data
-$gateway = $collection->get_record_meta($payment_id, 'gateway', true);
+$gateway = $db->get_record_meta($payment_id, 'gateway', true, 'payments');
 
 // Update meta data
-$collection->update_record_meta($payment_id, 'gateway', 'paypal');
+$db->update_record_meta($payment_id, 'gateway', 'paypal', '', 'payments');
 
 // Delete meta data
-$collection->delete_record_meta($payment_id, 'gateway');
+$db->delete_record_meta($payment_id, 'gateway', '', 'payments');
+
+// Delete all metadata for a record
+$db->delete_all_record_meta($payment_id, 'payments');
+
+// Delete all metadata by key across all records
+$db->delete_all_meta_by_key('old_field', 'payments');
 
 // Check if meta exists
-if ($collection->record_meta_exists($payment_id, 'gateway')) {
+if ($db->record_meta_exists($payment_id, 'gateway', 'payments')) {
     // Meta exists
 }
+
+// Using Collection directly
+$collection = Store::instance('my_store')->get('payments');
+$collection->add_record_meta($payment_id, 'gateway', 'stripe');
+$gateway = $collection->get_record_meta($payment_id, 'gateway', true);
+$collection->update_record_meta($payment_id, 'gateway', 'paypal');
+$collection->delete_record_meta($payment_id, 'gateway');
 ```
 
 ### Error Handling
 
 ```php
+use Hizzle\Store\Main;
+
+// Main class automatically converts exceptions to WP_Error
+$db = Main::instance('my_store');
+$payment = $db->get('payments', $payment_id);
+
+if (is_wp_error($payment)) {
+    error_log($payment->get_error_message());
+} else {
+    // Work with the payment
+    echo $payment->get('amount');
+}
+
+// When using Store/Collection directly, use try/catch
 try {
     $collection = Store::instance('my_store')->get('payments');
     $payment = $collection->get($payment_id);
