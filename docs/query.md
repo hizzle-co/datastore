@@ -9,37 +9,40 @@ The `Query` class provides a powerful and flexible query builder for retrieving 
 
 ## Description
 
-Provides a fluent interface for building and executing database queries against collections. The Query class handles complex operations including WHERE clauses, ORDER BY, LIMIT/OFFSET, aggregate functions (SUM, AVG, COUNT, MIN, MAX), and JOIN queries.
+Provides a fluent interface for building and executing database queries against collections. The Query class handles complex operations including filtering by field values, ORDER BY, LIMIT/OFFSET, aggregate functions (SUM, AVG, COUNT, MIN, MAX), and JOIN queries.
 
 ## Key Properties
 
 - `$collection_name` (string) - The collection being queried
 - `$query_vars` (array) - Parsed query variables
 - `$aggregate` (int|float|array) - Results of aggregate queries
-- `$found_rows` (array) - IDs of found objects
-- `$found_items` (array) - Found record objects
-- `$total` (int) - Total count of matching records
+- `$results` (array) - IDs or objects of found records
+- `$total_results` (int) - Total count of matching records
 
 ## Query Arguments
 
 ### Basic Query Args
 
-- `where` (array) - Array of WHERE conditions
+- **Field Filtering** - Pass field names directly as query arguments (e.g., `status => 'active'`)
 - `orderby` (array|string) - Sort field(s)
-- `order` (string) - Sort direction (ASC/DESC)
-- `limit` (int) - Number of records to return
+- `order` (string) - Sort direction (ASC/DESC, default: DESC)
+- `per_page` (int) - Number of records to return per page (default: -1 for all, also accepts `number`)
+- `page` (int) - Page number for pagination (default: 1, also accepts `paged`)
 - `offset` (int) - Number of records to skip
-- `fields` (string|array) - Fields to retrieve (default: all)
-- `count` (bool) - Return count instead of records
+- `fields` (string|array) - Fields to retrieve ('all' or array of field names, default: 'all')
+- `count_total` (bool) - Whether to count total matching records (default: true)
+- `count_only` (bool) - Return only count instead of records (default: false)
 
 ### Advanced Query Args
 
 - `aggregate` (array) - Aggregate functions to perform (supports string, array, or complex configuration)
 - `groupby` (string|array) - Fields to group by (supports casting for date fields)
-- `having` (array) - HAVING clause for aggregates
 - `join` (array) - JOIN operations to perform
 - `meta_query` (array) - Query by metadata (uses WP_Meta_Query format)
-- `search` (string) - Search term
+- `search` (string) - Search term to search across fields
+- `search_columns` (array) - Specific fields to search in
+- `include` (array) - Array of IDs to include
+- `exclude` (array) - Array of IDs to exclude
 - `extra_fields` (array) - Additional fields to include in aggregate results without aggregating
 
 ## Main Methods
@@ -50,15 +53,13 @@ Provides a fluent interface for building and executing database queries against 
 
 Executes the query and returns matching records.
 
-**Returns:** `Record[]` - Array of Record objects
+**Returns:** `Record[]` - Array of Record objects (when fields='all'), or array of values
 
 **Example:**
 ```php
 $query = $collection->query(array(
-    'where' => array(
-        array('status', '=', 'active'),
-    ),
-    'limit' => 10,
+    'status' => 'active',
+    'per_page' => 10,
 ));
 
 $results = $query->get_results();
@@ -69,15 +70,15 @@ foreach ($results as $record) {
 
 #### `get_total()`
 
-Returns the total count of matching records (without limit).
+Returns the total count of matching records (without pagination limit).
 
 **Returns:** `int` - Total number of records
 
 **Example:**
 ```php
-$query = $collection->query(array('limit' => 10));
+$query = $collection->query(array('per_page' => 10));
 $results = $query->get_results();
-$total = $query->get_total(); // Total count ignoring limit
+$total = $query->get_total(); // Total count ignoring per_page
 ```
 
 #### `get_ids()`
@@ -88,10 +89,11 @@ Returns only the IDs of matching records.
 
 **Example:**
 ```php
-$query = $collection->query(array('where' => array(
-    array('status', '=', 'active'),
-)));
-$ids = $query->get_ids();
+$query = $collection->query(array(
+    'status' => 'active',
+    'fields' => 'id',
+));
+$ids = $query->get_results();
 // Returns: array(1, 5, 12, 23, ...)
 ```
 
@@ -102,66 +104,149 @@ $ids = $query->get_ids();
 ```php
 $products = Store::instance('shop')->get_collection('products');
 
-// Simple WHERE clause
+// Simple field filter - equals
 $query = $products->query(array(
-    'where' => array(
-        array('price', '>', 50),
+    'price' => 50,
+));
+
+// Field filter - array values (IN query)
+$query = $products->query(array(
+    'status' => array('published', 'featured'),
+));
+
+// Multiple field conditions (all are AND)
+$query = $products->query(array(
+    'status' => 'published',
+    'stock' => 10,
+));
+
+// Negation with _not suffix
+$query = $products->query(array(
+    'status_not' => 'draft',
+));
+
+// Negation with array (NOT IN)
+$query = $products->query(array(
+    'status_not' => array('draft', 'pending'),
+));
+```
+
+### Field Filtering
+
+The Query class automatically filters records based on field names passed directly as query arguments. There is no `where` argument - you pass the field name directly.
+
+```php
+// Simple equality
+$query = $products->query(array(
+    'status' => 'published',
+));
+// Generates: WHERE status = 'published'
+
+// Array values (IN operator)
+$query = $products->query(array(
+    'category' => array('electronics', 'gadgets'),
+));
+// Generates: WHERE category IN ('electronics', 'gadgets')
+
+// Negation (NOT EQUAL)
+$query = $products->query(array(
+    'status_not' => 'draft',
+));
+// Generates: WHERE status <> 'draft'
+
+// Negation with array (NOT IN)
+$query = $products->query(array(
+    'id_not' => array(1, 2, 3),
+));
+// Generates: WHERE id NOT IN (1, 2, 3)
+
+// Special value 'any' - skips filtering for that field
+$query = $products->query(array(
+    'status' => 'any', // No filter applied for status
+    'category' => 'electronics',
+));
+
+// Combining multiple conditions (all are AND)
+$query = $products->query(array(
+    'status' => 'published',
+    'featured' => 1,
+    'category_not' => 'discontinued',
+));
+```
+
+### Date Field Queries
+
+For date fields, you can use special suffixes:
+
+```php
+// Date range with _before and _after
+$query = $products->query(array(
+    'created_at_after' => '2026-01-01',
+    'created_at_before' => '2026-12-31',
+));
+
+// Complex date query with _query suffix
+$query = $products->query(array(
+    'created_at_query' => array(
+        array(
+            'after' => '2026-01-01',
+            'before' => '2026-12-31',
+            'inclusive' => true,
+        ),
     ),
 ));
 
-// Multiple conditions (AND)
+// Date queries support WP_Date_Query format
 $query = $products->query(array(
-    'where' => array(
-        array('status', '=', 'published'),
-        array('stock', '>', 0),
-        array('price', '<', 100),
-    ),
-));
-
-// OR conditions
-$query = $products->query(array(
-    'where' => array(
-        'relation' => 'OR',
-        array('category', '=', 'electronics'),
-        array('category', '=', 'gadgets'),
+    'created_at_query' => array(
+        array(
+            'year' => 2026,
+            'month' => 1,
+        ),
     ),
 ));
 ```
 
-### Comparison Operators
+### Numeric Field Queries
+
+For numeric and float fields, use `_min` and `_max` suffixes:
 
 ```php
-// Supported operators: =, !=, >, <, >=, <=, LIKE, NOT LIKE, IN, NOT IN
-
-// LIKE operator
+// Minimum value
 $query = $products->query(array(
-    'where' => array(
-        array('name', 'LIKE', '%widget%'),
-    ),
+    'price_min' => 50,
 ));
+// Generates: WHERE price >= 50
 
-// IN operator
+// Maximum value
 $query = $products->query(array(
-    'where' => array(
-        array('status', 'IN', array('published', 'featured')),
-    ),
+    'price_max' => 100,
 ));
+// Generates: WHERE price <= 100
 
-// NOT IN operator
+// Range query
 $query = $products->query(array(
-    'where' => array(
-        array('id', 'NOT IN', array(1, 2, 3)),
-    ),
+    'price_min' => 50,
+    'price_max' => 100,
+));
+// Generates: WHERE price >= 50 AND price <= 100
+
+// Combine with other filters
+$query = $products->query(array(
+    'status' => 'published',
+    'price_min' => 50,
+    'stock' => 0,
+    'stock_not' => 0, // stock is not zero
 ));
 ```
 
 ### Sorting and Pagination
 
 ```php
-// Order by single field
+// Order by single field (default order is DESC)
 $query = $products->query(array(
     'orderby' => 'price',
-    'order' => 'DESC',
+    'order' => 'ASC',
 ));
 
 // Order by multiple fields
@@ -172,17 +257,29 @@ $query = $products->query(array(
     ),
 ));
 
-// Pagination
+// Pagination with per_page and page
 $page = 2;
 $per_page = 20;
 $query = $products->query(array(
-    'limit' => $per_page,
-    'offset' => ($page - 1) * $per_page,
+    'per_page' => $per_page,
+    'page' => $page,
 ));
 
 $results = $query->get_results();
 $total = $query->get_total();
 $pages = ceil($total / $per_page);
+
+// Alternative: use offset
+$query = $products->query(array(
+    'per_page' => 20,
+    'offset' => 40, // Skip first 40 records
+));
+
+// Backward compatibility: number and paged
+$query = $products->query(array(
+    'number' => 20, // Alias for per_page
+    'paged' => 2,   // Alias for page
+));
 ```
 
 ### Selecting Specific Fields
@@ -193,11 +290,17 @@ $query = $products->query(array(
     'fields' => array('id', 'name', 'price'),
 ));
 
-// Get only IDs
+// Get only IDs (returns array of integers)
 $query = $products->query(array(
     'fields' => 'id',
 ));
-$ids = $query->get_ids();
+$ids = $query->get_results();
+// Returns: array(1, 5, 12, 23, ...)
+
+// Get all fields (default)
+$query = $products->query(array(
+    'fields' => 'all',
+));
 ```
 
 ### Aggregate Functions
@@ -205,11 +308,9 @@ $ids = $query->get_ids();
 #### Basic Aggregates
 
 ```php
-// COUNT
+// COUNT - using the count() method
 $count = $products->count(array(
-    'where' => array(
-        array('status', '=', 'published'),
-    ),
+    'status' => 'published',
 ));
 
 // SUM
@@ -220,7 +321,7 @@ $result = $products->aggregate(array(
 ));
 $total_value = $result[0]['price_sum'];
 
-// Multiple aggregates
+// Multiple aggregates on one field
 $result = $products->aggregate(array(
     'aggregate' => array(
         'price' => array('SUM', 'AVG', 'MIN', 'MAX'),
@@ -535,34 +636,33 @@ $results = $products->aggregate(array(
 // )
 ```
 
-### HAVING Clause
+### Filtering Aggregates
+
+You can filter aggregate results by applying regular field filters to your aggregate query:
 
 ```php
-// Find categories with more than 10 products
+// Find total sales by category for published products only
 $results = $products->aggregate(array(
+    'status' => 'published', // Filter condition
     'aggregate' => array(
+        'price' => 'SUM',
         'id' => 'COUNT',
     ),
     'groupby' => 'category',
-    'having' => array(
-        array('id_count', '>', 10),
-    ),
 ));
 
-// Complex HAVING conditions
+// Combine with date filters
 $results = $products->aggregate(array(
+    'created_at_after' => '2026-01-01',
+    'status' => 'published',
     'aggregate' => array(
         'price' => array('SUM', 'AVG'),
-        'id' => 'COUNT',
     ),
     'groupby' => 'category',
-    'having' => array(
-        'relation' => 'AND',
-        array('id_count', '>', 10),
-        array('price_sum', '>', 1000),
-        array('price_avg', '<', 100),
-    ),
 ));
+
+// Note: There is no HAVING clause. All filtering happens via field filters.
+// To filter on aggregate results, you need to post-process the results in PHP.
 ```
 
 ### JOIN Queries
@@ -641,7 +741,7 @@ $query = $customers->query(array(
 ### Meta Queries
 
 ```php
-// Query by metadata
+// Query by single metadata field
 $query = $products->query(array(
     'meta_query' => array(
         array(
@@ -667,24 +767,54 @@ $query = $products->query(array(
         ),
     ),
 ));
+
+// Shorthand for meta fields (if defined in collection schema)
+// If your collection has meta fields defined, you can filter them directly
+$query = $products->query(array(
+    'color' => 'red', // Assumes 'color' is a meta field
+));
+
+// Negation for meta fields
+$query = $products->query(array(
+    'color_not' => 'red',
+));
 ```
 
 ### Search
 
 ```php
-// Search across searchable fields
+// Search across searchable fields (defined in collection schema)
 $query = $products->query(array(
     'search' => 'widget',
+));
+
+// Search in specific columns
+$query = $products->query(array(
+    'search' => 'phone',
+    'search_columns' => array('name', 'description'),
 ));
 
 // Combine search with other filters
 $query = $products->query(array(
     'search' => 'phone',
-    'where' => array(
-        array('price', '<', 500),
-    ),
+    'price_max' => 500,
     'orderby' => 'price',
     'order' => 'ASC',
+));
+```
+
+### Include/Exclude IDs
+
+```php
+// Include specific IDs
+$query = $products->query(array(
+    'include' => array(1, 5, 12, 23),
+));
+
+// Exclude specific IDs
+$query = $products->query(array(
+    'exclude' => array(1, 2, 3),
+    'status' => 'published',
 ));
 ```
 
@@ -693,31 +823,50 @@ $query = $products->query(array(
 ```php
 // Advanced query combining multiple features
 $query = $products->query(array(
-    'where' => array(
-        'relation' => 'AND',
-        array('status', '=', 'published'),
-        array(
-            'relation' => 'OR',
-            array('category', '=', 'electronics'),
-            array('featured', '=', 1),
-        ),
-    ),
+    // Field filters
+    'status' => 'published',
+    'featured' => 1,
+    'category' => array('electronics', 'gadgets'),
+    'price_min' => 10,
+    'price_max' => 500,
+    
+    // Meta query for complex metadata conditions
     'meta_query' => array(
         array(
             'key' => 'brand',
             'value' => 'premium',
         ),
     ),
+    
+    // Sorting
     'orderby' => array(
         'featured' => 'DESC',
         'price' => 'ASC',
     ),
-    'limit' => 20,
-    'offset' => 0,
+    
+    // Pagination
+    'per_page' => 20,
+    'page' => 1,
 ));
 
 $results = $query->get_results();
 $total = $query->get_total();
+
+// Or using shorthand if 'brand' is a defined meta field in schema
+$query = $products->query(array(
+    'status' => 'published',
+    'featured' => 1,
+    'category' => array('electronics', 'gadgets'),
+    'price_min' => 10,
+    'price_max' => 500,
+    'brand' => 'premium', // Direct meta field filter
+    'orderby' => array(
+        'featured' => 'DESC',
+        'price' => 'ASC',
+    ),
+    'per_page' => 20,
+    'page' => 1,
+));
 ```
 
 ## Return Values
@@ -726,7 +875,9 @@ $total = $query->get_total();
 
 ```php
 $results = $query->get_results();
-// Returns: Array of Record objects
+// Returns: Array of Record objects (when fields='all')
+// Or: Array of field values (when fields is specific field)
+// Or: Array of arrays (when fields is array of multiple fields)
 ```
 
 ### Count Query
@@ -734,6 +885,13 @@ $results = $query->get_results();
 ```php
 $count = $collection->count($args);
 // Returns: Integer
+
+// Or using count_only
+$query = $collection->query(array(
+    'count_only' => true,
+    'status' => 'published',
+));
+$count = $query->get_total();
 ```
 
 ### Aggregate Query
@@ -760,13 +918,11 @@ $results = $collection->aggregate($args);
    'fields' => array('id', 'name')
    ```
 
-2. **Use count** instead of fetching all records:
+2. **Use count_only** instead of fetching all records:
    ```php
-   $total = $collection->count($args);
-   // Or use count_only in query
    $query = $collection->query(array(
        'count_only' => true,
-       'where' => array(...),
+       'status' => 'published',
    ));
    $total = $query->get_total();
    ```
@@ -790,8 +946,10 @@ $results = $collection->aggregate($args);
 
 8. **Use CASE expressions** in aggregates instead of multiple queries for conditional calculations
 
+9. **Filter early** - apply field filters in the query rather than filtering results in PHP
+
 ## See Also
 
 - [Collection](collection.md) - Creating queries
 - [Record](record.md) - Working with query results
-- [JOIN Guide](../JOINS.md) - Detailed JOIN documentation
+- [JOIN Guide](joins.md) - Detailed JOIN documentation

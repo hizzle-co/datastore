@@ -73,9 +73,8 @@ Store::init('my_store', array(
 ## Additional Resources
 
 - [Main Repository README](../README.md)
-- [JOIN Queries Guide](../JOINS.md)
 
 ## Requirements
 
 - PHP >= 5.3.0
-- WordPress (for REST API and database integration)
+- WordPress >= 4.7.0
