@@ -54,6 +54,7 @@ Define relationships between collections:
 
 ```php
 'customers' => array(
+    'status' => 'complete',
     // ... other config
     'joins' => array(
         'payments' => array(
@@ -102,10 +103,10 @@ Complete documentation for all components is available in the [docs](docs/) fold
 
 ### Guides
 
-- [JOIN Queries Guide](JOINS.md) - Comprehensive guide to using JOINs
+- [JOIN Queries Guide](docs/joins.md) - Comprehensive guide to using JOINs
 - [Example Code](example-joins.php) - Working examples with JOINs
 
 ## Requirements
 
 - PHP >= 5.3.0
-- WordPress (for REST API and database integration)
+- WordPress >= 4.7.0
