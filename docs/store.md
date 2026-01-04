@@ -1,6 +1,6 @@
 # Store
 
-The `Store` class is the main entry point for managing multiple collections of data. A store contains an array of collections, which in turn contain records with properties.
+The `Store` class is the main entry point for managing multiple collections of data. A store contains an array of [collections](collection.md), which in turn contain [records](record.md) with [properties](prop.md).
 
 ## Class Overview
 
@@ -15,7 +15,6 @@ Handles CRUD operations on an array of collections. The Store class acts as a re
 
 - `$namespace` (string) - Namespace of this store's instance
 - `$collections` (Collection[]) - A list of collections managed by this store
-- `$instances` (Store[]) - Static registry of all store instances
 
 ## Main Methods
 
@@ -29,12 +28,76 @@ Creates a new store instance.
 
 **Example:**
 ```php
-$store = new Store('my_store', array(
-    'customers' => array(
-        'name' => 'customers',
-        'props' => array(/* ... */),
-    ),
-));
+$store = new Store(
+    'my_store',
+    array(
+        'payments' => array(
+            // This object must extend Hizzle\Store\Record
+            'object'        => 'Payment',
+            'singular_name' => 'payment',
+            'props'         => array(
+                'id'                  => array(
+                    'type'        => 'BIGINT',
+                    'length'      => 20,
+                    'nullable'    => false,
+                    'extra'       => 'AUTO_INCREMENT',
+                    'description' => 'Payment ID',
+                ),
+                'customer_id'       => array(
+                    'type'        => 'BIGINT',
+                    'length'      => 20,
+                    'nullable'    => false,
+                    'description' => 'Customer ID',
+                ),
+                /* ... */
+            ),
+            'joins'         => array(
+                'customers' => array(
+                    'collection' => 'my_store_customers',
+                    'on'         => 'customer_id',
+                    'type'       => 'LEFT',
+                ),
+                'plans'     => array(
+                    'collection' => 'my_store_plans',
+                    'on'         => 'plan_id',
+                    'type'       => 'LEFT',
+                ),
+                'products'  => array(
+                    'collection' => 'my_store_products',
+                    // We are assuming that the above payments schema has
+                    // No 'plan_id' property, so we join via plans table
+                    // Which is already joined above
+                    'on'         => 'plans.product_id',
+                    'type'       => 'LEFT',
+                ),
+            ),
+            'keys'          => array(
+                'primary'             => array( 'id' ),
+                'customer_id'         => array( 'customer_id' ),
+                'subscription_id'     => array( 'subscription_id' ),
+                'status'              => array( 'status' ),
+                'date_created_status' => array( 'date_created', 'status' ),
+                'unique'              => array( 'uuid', 'transaction_id' ),
+            ),
+            'labels'        => array(
+                'name'          => __( 'Payments', 'textdomain' ),
+                'singular_name' => __( 'Payment', 'textdomain' ),
+                'add_new'       => __( 'Add New', 'textdomain' ),
+                'add_new_item'  => __( 'Add New Payment', 'textdomain' ),
+                'edit_item'     => __( 'Overview', 'textdomain' ),
+                'new_item'      => __( 'Add Payment', 'textdomain' ),
+                'view_item'     => __( 'View Payment', 'textdomain' ),
+                'view_items'    => __( 'View Payments', 'textdomain' ),
+                'search_items'  => __( 'Search payments', 'textdomain' ),
+                'not_found'     => __( 'No payments found.', 'textdomain' ),
+                'import'        => __( 'Import Payments', 'textdomain' ),
+            ),
+        ),
+        'customers' => array( /* ... */ ),
+        /** Other collections **/
+    )
+);
+
 ```
 
 ### `init( $namespace, $collections = array() )` (static)

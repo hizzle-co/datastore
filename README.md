@@ -2,6 +2,14 @@
 
 This is currently in Beta so expect the API to change alot.
 
+## Installation
+
+Install via Composer:
+
+```bash
+composer require hizzle/store
+```
+
 ## Features
 
 - **CRUD Operations**: Create, read, update, and delete records

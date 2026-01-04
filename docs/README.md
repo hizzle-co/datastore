@@ -2,6 +2,14 @@
 
 Welcome to the Hizzle Datastore documentation. This library provides a standardized way of creating data stores for your PHP/WordPress projects.
 
+## Installation
+
+Install via Composer:
+
+```bash
+composer require hizzle/store
+```
+
 ## Core Components
 
 The Datastore library consists of the following main components:
