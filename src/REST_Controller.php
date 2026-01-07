@@ -1695,6 +1695,16 @@ class REST_Controller extends \WP_REST_Controller {
 	}
 
 	/**
+	 * Strips version from namespace.
+	 *
+	 * @param string $namespace Namespace with version.
+	 * @return string Namespace without version.
+	 */
+	protected static function strip_version_from_namespace( $namespace ) {
+		return preg_replace( '/\/v\d+$/', '', $namespace );
+	}
+
+	/**
 	 * Exports items as CSV.
 	 *
 	 * @param \WP_REST_Request $request Full details about the request.
@@ -1755,10 +1765,12 @@ class REST_Controller extends \WP_REST_Controller {
 
 		// Send file
 		$filename = sanitize_file_name( basename( $export_data['file'] ) );
+		// Additional sanitization to prevent header injection
+		$filename = preg_replace( '/[^a-zA-Z0-9._-]/', '', $filename );
 
 		// Set headers for file download
 		header( 'Content-Type: text/csv; charset=utf-8' );
-		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Content-Disposition: attachment; filename="' . addslashes( $filename ) . '"' );
 		header( 'Content-Length: ' . filesize( $export_data['file'] ) );
 		header( 'Cache-Control: no-cache, no-store, must-revalidate' );
 		header( 'Pragma: no-cache' );
@@ -1850,7 +1862,7 @@ class REST_Controller extends \WP_REST_Controller {
 	public static function process_export_task( $export_data ) {
 		try {
 			// Get the collection.
-			$namespace  = preg_replace( '/\/v\d+$/', '', $export_data['namespace'] );
+			$namespace  = self::strip_version_from_namespace( $export_data['namespace'] );
 			$store      = Store::instance( $namespace );
 			$collection = $store->get( $export_data['rest_base'] );
 
@@ -1942,8 +1954,10 @@ class REST_Controller extends \WP_REST_Controller {
 			$fields = wp_parse_list( $export_data['params']['__fields'] );
 		} else {
 			// Get all non-hidden fields.
+			// Convert hidden array to hashmap for faster lookups
+			$hidden_map = array_flip( $collection->hidden );
 			foreach ( $collection->get_props() as $prop ) {
-				if ( ! in_array( $prop->name, $collection->hidden, true ) && ! $prop->is_dynamic ) {
+				if ( ! isset( $hidden_map[ $prop->name ] ) && ! $prop->is_dynamic ) {
 					$fields[] = $prop->name;
 				}
 			}
@@ -2009,7 +2023,7 @@ class REST_Controller extends \WP_REST_Controller {
 		), 24 * HOUR_IN_SECONDS );
 
 		// Create download URL with token
-		$namespace    = preg_replace( '/\/v\d+$/', '', $export_data['namespace'] );
+		$namespace    = self::strip_version_from_namespace( $export_data['namespace'] );
 		$download_url = rest_url( sprintf(
 			'%s/v1/%s/export/download/%s',
 			$namespace,
