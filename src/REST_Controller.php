@@ -1731,10 +1731,10 @@ class REST_Controller extends \WP_REST_Controller {
 	 */
 	public function download_export( $request ) {
 		$token = $request['token'];
-		
+
 		// Get export data from transient
 		$export_data = get_transient( 'hizzle_export_' . $token );
-		
+
 		if ( false === $export_data ) {
 			return new \WP_Error(
 				'invalid_token',
@@ -1742,7 +1742,7 @@ class REST_Controller extends \WP_REST_Controller {
 				array( 'status' => 404 )
 			);
 		}
-		
+
 		// Verify file exists
 		if ( ! file_exists( $export_data['file'] ) ) {
 			delete_transient( 'hizzle_export_' . $token );
@@ -1752,10 +1752,10 @@ class REST_Controller extends \WP_REST_Controller {
 				array( 'status' => 404 )
 			);
 		}
-		
+
 		// Send file
-		$filename = basename( $export_data['file'] );
-		
+		$filename = sanitize_file_name( basename( $export_data['file'] ) );
+
 		// Set headers for file download
 		header( 'Content-Type: text/csv; charset=utf-8' );
 		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
@@ -1763,7 +1763,7 @@ class REST_Controller extends \WP_REST_Controller {
 		header( 'Cache-Control: no-cache, no-store, must-revalidate' );
 		header( 'Pragma: no-cache' );
 		header( 'Expires: 0' );
-		
+
 		// Output file content
 		readfile( $export_data['file'] );
 		exit;
@@ -1777,10 +1777,10 @@ class REST_Controller extends \WP_REST_Controller {
 	 */
 	public function download_export_permissions_check( $request ) {
 		$token = $request['token'];
-		
+
 		// Get export data from transient
 		$export_data = get_transient( 'hizzle_export_' . $token );
-		
+
 		if ( false === $export_data ) {
 			return new \WP_Error(
 				'invalid_token',
@@ -1788,10 +1788,10 @@ class REST_Controller extends \WP_REST_Controller {
 				array( 'status' => 404 )
 			);
 		}
-		
+
 		// Verify current user is the one who requested the export
 		$current_user = wp_get_current_user();
-		
+
 		if ( empty( $current_user ) || empty( $current_user->ID ) || $current_user->ID !== $export_data['user_id'] ) {
 			return new \WP_Error(
 				'unauthorized',
@@ -1799,7 +1799,7 @@ class REST_Controller extends \WP_REST_Controller {
 				array( 'status' => 403 )
 			);
 		}
-		
+
 		return true;
 	}
 
@@ -1997,10 +1997,11 @@ class REST_Controller extends \WP_REST_Controller {
 	 * @param string $csv_path    CSV file path.
 	 */
 	protected static function send_export_email( $export_data, $csv_path ) {
-		// Generate a secure download token
+		// Generate a secure download token with additional entropy
 		$filename    = basename( $csv_path );
-		$token       = wp_hash( $filename . $export_data['user_id'] . $export_data['timestamp'] );
-		
+		$random_salt = wp_generate_password( 32, true, true );
+		$token       = wp_hash( $filename . $export_data['user_id'] . $export_data['timestamp'] . $random_salt );
+
 		// Store the token temporarily (24 hours)
 		set_transient( 'hizzle_export_' . $token, array(
 			'file'    => $csv_path,
@@ -2030,7 +2031,7 @@ Thank you!', 'hizzle-store' ),
 		);
 
 		$sent = wp_mail( $export_data['user_email'], $subject, $message );
-		
+
 		// Log if email failed
 		if ( ! $sent ) {
 			error_log( sprintf(
@@ -2060,7 +2061,7 @@ Please try again or contact support if the problem persists.', 'hizzle-store' ),
 		);
 
 		$sent = wp_mail( $email, $subject, $email_message );
-		
+
 		// Log if email failed
 		if ( ! $sent ) {
 			error_log( sprintf(

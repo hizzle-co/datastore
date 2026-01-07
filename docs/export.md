@@ -6,11 +6,12 @@ The datastore library includes a built-in export feature that allows you to expo
 
 1. The user makes a POST request to the export endpoint with optional filters
 2. A background task is scheduled to generate the CSV file
-3. The CSV file is saved in the uploads folder with a unique name
-4. An email is sent to the user with a download link
-5. The file is automatically deleted after 24 hours
+3. The CSV file is saved in a protected uploads folder with a unique name
+4. A secure download token is generated and stored temporarily
+5. An email is sent to the user with a secure download link
+6. The file and token are automatically deleted after 24 hours
 
-## REST API Endpoint
+## REST API Endpoints
 
 ### Export Items
 
@@ -43,6 +44,22 @@ curl -X POST \
 }
 ```
 
+### Download Export
+
+**Endpoint:** `GET /{namespace}/v1/{collection}/export/download/{token}`
+
+**Authentication:** User must be logged in as the user who requested the export
+
+**Example Request:**
+
+```bash
+curl -X GET \
+  'https://example.com/wp-json/my_store/v1/payments/export/download/abc123def456...' \
+  -H 'Authorization: Bearer YOUR_TOKEN'
+```
+
+The download endpoint will stream the CSV file directly to the user.
+
 ## Email Notification
 
 The user will receive an email with the following information:
@@ -53,7 +70,7 @@ The user will receive an email with the following information:
 ```
 Your export has been generated successfully. You can download it from the link below:
 
-https://example.com/wp-content/uploads/hizzle-exports/payments-export-1704614400-abc123def456.csv
+https://example.com/wp-json/my_store/v1/payments/export/download/abc123def456...
 
 Please note that this file will be automatically deleted in 24 hours.
 
@@ -67,11 +84,11 @@ Export files are stored in:
 wp-content/uploads/hizzle-exports/
 ```
 
-The directory is protected with an `.htaccess` file to prevent direct browsing, but the files are still accessible via direct URL.
+The directory is protected with an `.htaccess` file that prevents direct access to files. Files can only be downloaded via the secure download endpoint with a valid token.
 
 ## Automatic Cleanup
 
-Export files are automatically deleted 24 hours after creation using WordPress cron.
+Export files and download tokens are automatically deleted 24 hours after creation using WordPress cron.
 
 ## Filtering Exported Fields
 
@@ -84,14 +101,17 @@ curl -X POST \
   -d '{"__fields": "id,customer_id,amount,status"}'
 ```
 
-If `__fields` is not provided, all non-hidden fields will be exported.
+If `__fields` is not provided, all non-hidden and non-dynamic fields will be exported.
 
 ## Security
 
-- Users must have permission to read items from the collection
-- Export files have unique, unpredictable names
+- Users must have permission to read items from the collection to initiate an export
+- Download tokens are unique, unpredictable, and time-limited (24 hours)
+- Only the user who requested the export can download it (verified by user ID)
+- Export files are stored in a directory protected by `.htaccess` to prevent direct access
 - Files are automatically deleted after 24 hours
-- The exports directory is protected with `.htaccess`
+- Email sending failures are logged for debugging
+- Token-based authentication prevents unauthorized access to export files
 
 ## Error Handling
 
@@ -108,11 +128,28 @@ Unfortunately, your export failed with the following error:
 Please try again or contact support if the problem persists.
 ```
 
+Email sending failures are logged to the error log for debugging.
+
 ## Background Processing
 
 The export process runs in the background using WordPress cron:
 
-1. `hizzle_store_process_export` - Processes the export task
-2. `hizzle_store_cleanup_export` - Cleans up old export files
+1. `hizzle_store_process_export` - Processes the export task (runs 10 seconds after request)
+2. `hizzle_store_cleanup_export` - Cleans up old export files (runs 24 hours after creation)
 
 These hooks are automatically registered when the REST_Controller is instantiated.
+
+## Data Type Handling
+
+The CSV export handles various data types:
+
+- **Dates**: Converted to 'Y-m-d H:i:s' format
+- **Arrays**: Converted to comma-separated strings
+- **Booleans**: Converted to 0/1
+- **Null values**: Converted to empty strings
+- **Objects**: Left as-is (may require custom handling)
+
+## Constants
+
+- `REST_Controller::EXPORT_TASK_DELAY` - Delay in seconds before processing export (default: 10)
+
