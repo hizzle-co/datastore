@@ -144,12 +144,19 @@ class Export {
 
 		// Prepare export data.
 		$export_data = array(
-			'namespace'  => $this->namespace,
-			'collection' => $this->collection,
-			'params'     => $params,
-			'user_id'    => $user->ID,
-			'user_email' => $user->user_email,
-			'timestamp'  => time(),
+			'namespace'    => $this->namespace,
+			'collection'   => $this->collection,
+			'params'       => $params,
+			'user_id'      => $user->ID,
+			'user_email'   => $user->user_email,
+			'timestamp'    => time(),
+			'file_id'      => sprintf(
+				'%s-%s-%s.csv',
+				$this->namespace,
+				$this->collection,
+				uniqid()
+			),
+			'current_page' => 1,
 		);
 
 		// Schedule the task.
@@ -174,6 +181,13 @@ class Export {
 	 */
 	public function process_export_task( $export_data ) {
 		try {
+
+			// Raise the time limit.
+			self::raise_time_limit();
+
+			// Ignore user aborts.
+			ignore_user_abort( true );
+
 			// Get the collection.
 			$collection = $this->fetch_collection();
 
@@ -365,8 +379,9 @@ class Export {
 
 		// Create download URL with token
 		$download_url = add_query_arg(
-			home_url( '/' ),
-			array( $this->namespace . '_' . $this->collection . '_download' => $token )
+			$this->namespace . '_' . $this->collection . '_download',
+			$token,
+			home_url( '/' )
 		);
 
 		$subject = 'Your Export is Ready';
@@ -444,6 +459,30 @@ class Export {
 	public function cleanup_export_file( $file_path ) {
 		if ( file_exists( $file_path ) ) {
 			wp_delete_file( $file_path );
+		}
+	}
+
+	/**
+	 * Attempts to raise the PHP timeout for time intensive processes.
+	 *
+	 * Only allows raising the existing limit and prevents lowering it.
+	 *
+	 * @param int $limit The time limit in seconds.
+	 */
+	public static function raise_time_limit( $limit = 0 ) {
+		$limit              = (int) $limit;
+		$max_execution_time = (int) ini_get( 'max_execution_time' );
+
+		/*
+		 * If the max execution time is already unlimited (zero), or if it exceeds or is equal to the proposed
+		 * limit, there is no reason for us to make further changes (we never want to lower it).
+		 */
+		if ( 0 === $max_execution_time || ( $max_execution_time >= $limit && 0 !== $limit ) ) {
+			return;
+		}
+
+		if ( function_exists( 'set_time_limit' ) && false === strpos( ini_get( 'disable_functions' ), 'set_time_limit' ) && ! ini_get( 'safe_mode' ) ) { // phpcs:ignore PHPCompatibility.IniDirectives.RemovedIniDirectives.safe_modeDeprecatedRemoved
+			@set_time_limit( $limit ); // @codingStandardsIgnoreLine
 		}
 	}
 }
