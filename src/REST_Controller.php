@@ -37,6 +37,13 @@ class REST_Controller extends \WP_REST_Controller {
 	const EXPORT_TASK_DELAY = 10;
 
 	/**
+	 * Number of records to process per batch during export.
+	 *
+	 * @var int
+	 */
+	const EXPORT_BATCH_SIZE = 1000;
+
+	/**
 	 * Loads the class.
 	 *
 	 * @param string $namespace The store's namespace.
@@ -1866,14 +1873,8 @@ class REST_Controller extends \WP_REST_Controller {
 			$store      = Store::instance( $namespace );
 			$collection = $store->get( $export_data['rest_base'] );
 
-			// Query the items.
-			$params             = $export_data['params'];
-			$params['per_page'] = -1; // Get all items.
-			$query              = $collection->query( $params );
-			$items              = $query->get_results();
-
-			// Generate CSV.
-			$csv_path = self::generate_csv( $items, $export_data, $collection );
+			// Generate CSV with batch processing.
+			$csv_path = self::generate_csv_in_batches( $export_data, $collection );
 
 			if ( is_wp_error( $csv_path ) ) {
 				self::send_export_error_email( $export_data['user_email'], $csv_path->get_error_message() );
@@ -1893,6 +1894,137 @@ class REST_Controller extends \WP_REST_Controller {
 		} catch ( Store_Exception $e ) {
 			self::send_export_error_email( $export_data['user_email'], $e->getMessage() );
 		}
+	}
+
+	/**
+	 * Generates a CSV file from items using batch processing.
+	 *
+	 * @param array      $export_data Export task data.
+	 * @param Collection $collection  The collection.
+	 * @return string|WP_Error CSV file path on success, WP_Error on failure.
+	 */
+	protected static function generate_csv_in_batches( $export_data, $collection ) {
+		// Get upload directory.
+		$upload_dir = wp_upload_dir();
+
+		if ( ! empty( $upload_dir['error'] ) ) {
+			return new \WP_Error( 'upload_dir_error', $upload_dir['error'] );
+		}
+
+		// Create exports directory if it doesn't exist.
+		$exports_dir = trailingslashit( $upload_dir['basedir'] ) . 'hizzle-exports';
+
+		if ( ! file_exists( $exports_dir ) ) {
+			wp_mkdir_p( $exports_dir );
+
+			// Add .htaccess to protect the directory from direct access.
+			$htaccess_file = trailingslashit( $exports_dir ) . '.htaccess';
+			if ( ! file_exists( $htaccess_file ) ) {
+				// Block direct access but allow PHP to read
+				$htaccess_content = "# Protect export files\n";
+				$htaccess_content .= "<Files *>\n";
+				$htaccess_content .= "Order Deny,Allow\n";
+				$htaccess_content .= "Deny from all\n";
+				$htaccess_content .= "</Files>\n";
+				file_put_contents( $htaccess_file, $htaccess_content );
+			}
+		}
+
+		// Generate unique filename.
+		$filename = sprintf(
+			'%s-export-%s-%s.csv',
+			$export_data['rest_base'],
+			$export_data['timestamp'],
+			wp_generate_password( 12, false )
+		);
+
+		$file_path = trailingslashit( $exports_dir ) . $filename;
+
+		// Open file for writing.
+		$file = fopen( $file_path, 'w' );
+
+		if ( false === $file ) {
+			return new \WP_Error( 'file_open_error', __( 'Failed to create CSV file.', 'hizzle-store' ) );
+		}
+
+		// Get fields to export.
+		$fields = array();
+
+		if ( ! empty( $export_data['params']['__fields'] ) ) {
+			$fields = wp_parse_list( $export_data['params']['__fields'] );
+		} else {
+			// Get all non-hidden fields.
+			// Convert hidden array to hashmap for faster lookups
+			$hidden = is_array( $collection->hidden ) ? $collection->hidden : array();
+			$hidden_map = array_flip( $hidden );
+			foreach ( $collection->get_props() as $prop ) {
+				if ( ! isset( $hidden_map[ $prop->name ] ) && ! $prop->is_dynamic ) {
+					$fields[] = $prop->name;
+				}
+			}
+		}
+
+		// Write CSV header.
+		fputcsv( $file, $fields );
+
+		// Process items in batches to avoid memory issues.
+		$params = $export_data['params'];
+		$params['per_page'] = self::EXPORT_BATCH_SIZE;
+		$page = 1;
+		$processed = 0;
+
+		do {
+			$params['paged'] = $page;
+
+			// Query a batch of items.
+			$query = $collection->query( $params );
+			$items = $query->get_results();
+
+			// Write batch to CSV.
+			foreach ( $items as $item ) {
+				$row = array();
+
+				foreach ( $fields as $field ) {
+					$value = $item->get( $field );
+
+					// Handle null values.
+					if ( null === $value ) {
+						$value = '';
+					}
+
+					// Convert dates to string.
+					if ( $value instanceof Date_Time ) {
+						$value = $value->format( 'Y-m-d H:i:s' );
+					}
+
+					// Convert arrays to comma-separated strings.
+					if ( is_array( $value ) ) {
+						$value = implode( ', ', $value );
+					}
+
+					// Convert booleans to 0/1.
+					if ( is_bool( $value ) ) {
+						$value = (int) $value;
+					}
+
+					$row[] = $value;
+				}
+
+				fputcsv( $file, $row );
+			}
+
+			$batch_count = count( $items );
+			$processed += $batch_count;
+			$page++;
+
+			// Free memory after each batch.
+			unset( $items, $query );
+
+		} while ( $batch_count === self::EXPORT_BATCH_SIZE );
+
+		fclose( $file );
+
+		return $file_path;
 	}
 
 	/**

@@ -6,10 +6,12 @@ The datastore library includes a built-in export feature that allows you to expo
 
 1. The user makes a POST request to the export endpoint with optional filters
 2. A background task is scheduled to generate the CSV file
-3. The CSV file is saved in a protected uploads folder with a unique name
-4. A secure download token is generated and stored temporarily
-5. An email is sent to the user with a secure download link
-6. The file and token are automatically deleted after 24 hours
+3. The CSV is generated using **batch processing** to handle large datasets efficiently
+4. Records are processed in batches of 1,000 (configurable) to avoid memory issues
+5. The CSV file is saved in a protected uploads folder with a unique name
+6. A secure download token is generated and stored temporarily
+7. An email is sent to the user with a secure download link
+8. The file and token are automatically deleted after 24 hours
 
 ## REST API Endpoints
 
@@ -152,4 +154,27 @@ The CSV export handles various data types:
 ## Constants
 
 - `REST_Controller::EXPORT_TASK_DELAY` - Delay in seconds before processing export (default: 10)
+- `REST_Controller::EXPORT_BATCH_SIZE` - Number of records to process per batch (default: 1000)
+
+## Performance & Scalability
+
+The export feature is designed to handle large datasets efficiently:
+
+- **Batch Processing**: Records are processed in batches of 1,000 (configurable) to avoid loading millions of records into memory at once
+- **Memory Management**: Each batch is freed from memory after processing
+- **No Timeout Issues**: Background processing via WordPress cron prevents HTTP timeouts
+- **Suitable for Large Datasets**: Can handle exports of 1,000,000+ records without crashing
+
+### Customizing Batch Size
+
+To customize the batch size, you can filter the constant:
+
+```php
+// Increase batch size for better performance on servers with more memory
+add_filter( 'hizzle_store_export_batch_size', function() {
+    return 5000;
+});
+```
+
+Note: Larger batch sizes improve performance but require more memory. The default of 1,000 is a good balance for most servers.
 
