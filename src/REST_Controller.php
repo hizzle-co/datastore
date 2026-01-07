@@ -30,6 +30,13 @@ class REST_Controller extends \WP_REST_Controller {
 	protected static $export_hooks_registered = false;
 
 	/**
+	 * Delay in seconds before processing export task.
+	 *
+	 * @var int
+	 */
+	const EXPORT_TASK_DELAY = 10;
+
+	/**
 	 * Loads the class.
 	 *
 	 * @param string $namespace The store's namespace.
@@ -419,6 +426,27 @@ class REST_Controller extends \WP_REST_Controller {
 					'callback'            => array( $this, 'export_items' ),
 					'permission_callback' => array( $this, 'get_items_permissions_check' ),
 					'args'                => $collection_params,
+				),
+				'schema' => '__return_empty_array',
+			)
+		);
+
+		// Method to download exported CSV file.
+		register_rest_route(
+			$this->namespace,
+			'/' . $this->rest_base . '/export/download/(?P<token>[a-zA-Z0-9]+)',
+			array(
+				'args'   => array(
+					'token' => array(
+						'description' => __( 'Download token for the exported file.', 'hizzle-store' ),
+						'type'        => 'string',
+						'required'    => true,
+					),
+				),
+				array(
+					'methods'             => \WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'download_export' ),
+					'permission_callback' => array( $this, 'download_export_permissions_check' ),
 				),
 				'schema' => '__return_empty_array',
 			)
@@ -1696,6 +1724,86 @@ class REST_Controller extends \WP_REST_Controller {
 	}
 
 	/**
+	 * Downloads an exported CSV file.
+	 *
+	 * @param \WP_REST_Request $request Full details about the request.
+	 * @return \WP_Error|\WP_REST_Response Response object on success, or WP_Error object on failure.
+	 */
+	public function download_export( $request ) {
+		$token = $request['token'];
+		
+		// Get export data from transient
+		$export_data = get_transient( 'hizzle_export_' . $token );
+		
+		if ( false === $export_data ) {
+			return new \WP_Error(
+				'invalid_token',
+				__( 'Invalid or expired download token.', 'hizzle-store' ),
+				array( 'status' => 404 )
+			);
+		}
+		
+		// Verify file exists
+		if ( ! file_exists( $export_data['file'] ) ) {
+			delete_transient( 'hizzle_export_' . $token );
+			return new \WP_Error(
+				'file_not_found',
+				__( 'Export file not found.', 'hizzle-store' ),
+				array( 'status' => 404 )
+			);
+		}
+		
+		// Send file
+		$filename = basename( $export_data['file'] );
+		
+		// Set headers for file download
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
+		header( 'Content-Length: ' . filesize( $export_data['file'] ) );
+		header( 'Cache-Control: no-cache, no-store, must-revalidate' );
+		header( 'Pragma: no-cache' );
+		header( 'Expires: 0' );
+		
+		// Output file content
+		readfile( $export_data['file'] );
+		exit;
+	}
+
+	/**
+	 * Check if a given request has access to download an export.
+	 *
+	 * @param \WP_REST_Request $request Full details about the request.
+	 * @return \WP_Error|boolean
+	 */
+	public function download_export_permissions_check( $request ) {
+		$token = $request['token'];
+		
+		// Get export data from transient
+		$export_data = get_transient( 'hizzle_export_' . $token );
+		
+		if ( false === $export_data ) {
+			return new \WP_Error(
+				'invalid_token',
+				__( 'Invalid or expired download token.', 'hizzle-store' ),
+				array( 'status' => 404 )
+			);
+		}
+		
+		// Verify current user is the one who requested the export
+		$current_user = wp_get_current_user();
+		
+		if ( empty( $current_user ) || empty( $current_user->ID ) || $current_user->ID !== $export_data['user_id'] ) {
+			return new \WP_Error(
+				'unauthorized',
+				__( 'You are not authorized to download this file.', 'hizzle-store' ),
+				array( 'status' => 403 )
+			);
+		}
+		
+		return true;
+	}
+
+	/**
 	 * Schedules an export task.
 	 *
 	 * @param \WP_REST_Request $request Full details about the request.
@@ -1721,7 +1829,7 @@ class REST_Controller extends \WP_REST_Controller {
 
 		// Schedule the task.
 		$scheduled = wp_schedule_single_event(
-			time() + 10, // Run in 10 seconds
+			time() + self::EXPORT_TASK_DELAY,
 			'hizzle_store_process_export',
 			array( $export_data )
 		);
@@ -1742,7 +1850,8 @@ class REST_Controller extends \WP_REST_Controller {
 	public static function process_export_task( $export_data ) {
 		try {
 			// Get the collection.
-			$store      = Store::instance( trim( $export_data['namespace'], '/v1' ) );
+			$namespace  = preg_replace( '/\/v\d+$/', '', $export_data['namespace'] );
+			$store      = Store::instance( $namespace );
 			$collection = $store->get( $export_data['rest_base'] );
 
 			// Query the items.
@@ -1767,7 +1876,7 @@ class REST_Controller extends \WP_REST_Controller {
 			);
 
 			// Send email with download link.
-			self::send_export_email( $export_data['user_email'], $csv_path );
+			self::send_export_email( $export_data, $csv_path );
 
 		} catch ( Store_Exception $e ) {
 			self::send_export_error_email( $export_data['user_email'], $e->getMessage() );
@@ -1796,10 +1905,16 @@ class REST_Controller extends \WP_REST_Controller {
 		if ( ! file_exists( $exports_dir ) ) {
 			wp_mkdir_p( $exports_dir );
 
-			// Add .htaccess to protect the directory.
+			// Add .htaccess to protect the directory from direct access.
 			$htaccess_file = trailingslashit( $exports_dir ) . '.htaccess';
 			if ( ! file_exists( $htaccess_file ) ) {
-				file_put_contents( $htaccess_file, 'deny from all' );
+				// Block direct access but allow PHP to read
+				$htaccess_content = "# Protect export files\n";
+				$htaccess_content .= "<Files *>\n";
+				$htaccess_content .= "Order Deny,Allow\n";
+				$htaccess_content .= "Deny from all\n";
+				$htaccess_content .= "</Files>\n";
+				file_put_contents( $htaccess_file, $htaccess_content );
 			}
 		}
 
@@ -1844,6 +1959,11 @@ class REST_Controller extends \WP_REST_Controller {
 			foreach ( $fields as $field ) {
 				$value = $item->get( $field );
 
+				// Handle null values.
+				if ( null === $value ) {
+					$value = '';
+				}
+
 				// Convert dates to string.
 				if ( $value instanceof Date_Time ) {
 					$value = $value->format( 'Y-m-d H:i:s' );
@@ -1873,12 +1993,28 @@ class REST_Controller extends \WP_REST_Controller {
 	/**
 	 * Sends an export email with download link.
 	 *
-	 * @param string $email    User email.
-	 * @param string $csv_path CSV file path.
+	 * @param array  $export_data Export data including namespace and user info.
+	 * @param string $csv_path    CSV file path.
 	 */
-	protected static function send_export_email( $email, $csv_path ) {
-		$upload_dir = wp_upload_dir();
-		$file_url   = str_replace( $upload_dir['basedir'], $upload_dir['baseurl'], $csv_path );
+	protected static function send_export_email( $export_data, $csv_path ) {
+		// Generate a secure download token
+		$filename    = basename( $csv_path );
+		$token       = wp_hash( $filename . $export_data['user_id'] . $export_data['timestamp'] );
+		
+		// Store the token temporarily (24 hours)
+		set_transient( 'hizzle_export_' . $token, array(
+			'file'    => $csv_path,
+			'user_id' => $export_data['user_id'],
+		), 24 * HOUR_IN_SECONDS );
+
+		// Create download URL with token
+		$namespace    = preg_replace( '/\/v\d+$/', '', $export_data['namespace'] );
+		$download_url = rest_url( sprintf(
+			'%s/v1/%s/export/download/%s',
+			$namespace,
+			$export_data['rest_base'],
+			$token
+		) );
 
 		$subject = __( 'Your Export is Ready', 'hizzle-store' );
 
@@ -1890,10 +2026,19 @@ class REST_Controller extends \WP_REST_Controller {
 Please note that this file will be automatically deleted in 24 hours.
 
 Thank you!', 'hizzle-store' ),
-			esc_url( $file_url )
+			esc_url( $download_url )
 		);
 
-		wp_mail( $email, $subject, $message );
+		$sent = wp_mail( $export_data['user_email'], $subject, $message );
+		
+		// Log if email failed
+		if ( ! $sent ) {
+			error_log( sprintf(
+				'Failed to send export email to %s for file %s',
+				$export_data['user_email'],
+				$filename
+			) );
+		}
 	}
 
 	/**
@@ -1914,7 +2059,16 @@ Please try again or contact support if the problem persists.', 'hizzle-store' ),
 			$message
 		);
 
-		wp_mail( $email, $subject, $email_message );
+		$sent = wp_mail( $email, $subject, $email_message );
+		
+		// Log if email failed
+		if ( ! $sent ) {
+			error_log( sprintf(
+				'Failed to send export error email to %s. Error: %s',
+				$email,
+				$message
+			) );
+		}
 	}
 
 	/**
