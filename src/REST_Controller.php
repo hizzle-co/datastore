@@ -1770,7 +1770,7 @@ class REST_Controller extends \WP_REST_Controller {
 
 		// Set headers for file download
 		header( 'Content-Type: text/csv; charset=utf-8' );
-		header( 'Content-Disposition: attachment; filename="' . addslashes( $filename ) . '"' );
+		header( 'Content-Disposition: attachment; filename="' . $filename . '"' );
 		header( 'Content-Length: ' . filesize( $export_data['file'] ) );
 		header( 'Cache-Control: no-cache, no-store, must-revalidate' );
 		header( 'Pragma: no-cache' );
@@ -1955,7 +1955,8 @@ class REST_Controller extends \WP_REST_Controller {
 		} else {
 			// Get all non-hidden fields.
 			// Convert hidden array to hashmap for faster lookups
-			$hidden_map = array_flip( $collection->hidden );
+			$hidden = is_array( $collection->hidden ) ? $collection->hidden : array();
+			$hidden_map = array_flip( $hidden );
 			foreach ( $collection->get_props() as $prop ) {
 				if ( ! isset( $hidden_map[ $prop->name ] ) && ! $prop->is_dynamic ) {
 					$fields[] = $prop->name;
@@ -2033,16 +2034,17 @@ class REST_Controller extends \WP_REST_Controller {
 
 		$subject = __( 'Your Export is Ready', 'hizzle-store' );
 
-		$message = sprintf(
-			__( 'Your export has been generated successfully. You can download it from the link below:
-
-%s
-
-Please note that this file will be automatically deleted in 24 hours.
-
-Thank you!', 'hizzle-store' ),
-			esc_url( $download_url )
+		// Build email message
+		$message_parts = array(
+			__( 'Your export has been generated successfully. You can download it from the link below:', 'hizzle-store' ),
+			'',
+			esc_url( $download_url ),
+			'',
+			__( 'Please note that this file will be automatically deleted in 24 hours.', 'hizzle-store' ),
+			'',
+			__( 'Thank you!', 'hizzle-store' ),
 		);
+		$message = implode( "\n", $message_parts );
 
 		$sent = wp_mail( $export_data['user_email'], $subject, $message );
 
@@ -2065,14 +2067,15 @@ Thank you!', 'hizzle-store' ),
 	protected static function send_export_error_email( $email, $message ) {
 		$subject = __( 'Export Failed', 'hizzle-store' );
 
-		$email_message = sprintf(
-			__( 'Unfortunately, your export failed with the following error:
-
-%s
-
-Please try again or contact support if the problem persists.', 'hizzle-store' ),
-			$message
+		// Build email message
+		$message_parts = array(
+			__( 'Unfortunately, your export failed with the following error:', 'hizzle-store' ),
+			'',
+			$message,
+			'',
+			__( 'Please try again or contact support if the problem persists.', 'hizzle-store' ),
 		);
+		$email_message = implode( "\n", $message_parts );
 
 		$sent = wp_mail( $email, $subject, $email_message );
 

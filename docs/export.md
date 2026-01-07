@@ -29,7 +29,7 @@ curl -X POST \
   -H 'Authorization: Bearer YOUR_TOKEN' \
   -d '{
     "status": "completed",
-    "date_created_after": "2026-01-01",
+    "date_created_after": "2024-01-01",
     "__fields": "id,customer_id,amount,status,date_created"
   }'
 ```
