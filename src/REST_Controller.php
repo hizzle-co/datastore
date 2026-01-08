@@ -53,7 +53,7 @@ class REST_Controller extends \WP_REST_Controller {
 		$this->exporter = new Export( $store_namespace, $collection );
 
 		// Register rest routes.
-		add_action( 'rest_api_init', array( $this, 'register_routes' ) );		
+		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 	}
 
 	/**
@@ -1704,6 +1704,22 @@ class REST_Controller extends \WP_REST_Controller {
 		}
 
 		// Schedule the background task.
+		wp_remote_get(
+			add_query_arg(
+				array(
+					'action'      => self::TASK_HOOK,
+					'_ajax_nonce' => wp_create_nonce( self::TASK_HOOK ),
+				),
+				admin_url( 'admin-ajax.php' )
+			),
+			array(
+				'timeout'   => 0.01,
+				'blocking'  => false,
+				'sslverify' => false,
+				'cookies'   => $_COOKIE,
+			)
+		);
+
 		$export_id = $this->exporter->schedule_export_task( $request->get_params() );
 
 		if ( is_wp_error( $export_id ) ) {

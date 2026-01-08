@@ -29,7 +29,7 @@ class Export {
 	 *
 	 * @var int
 	 */
-	const EXPORT_BATCH_SIZE = 1000;
+	const EXPORT_BATCH_SIZE = 500;
 
 	/**
 	 * Loads the class.
@@ -43,7 +43,10 @@ class Export {
 
 		add_action( "{$this->namespace}_{$this->collection}_process_export", array( $this, 'process_export_task' ) );
 		add_action( "{$this->namespace}_{$this->collection}_cleanup_export", array( $this, 'cleanup_export_file' ) );
+
+		// Download & AJAX
 		add_action( 'init', array( $this, 'maybe_download_export' ) );
+		add_action( "wp_ajax_{$this->namespace}_{$this->collection}_run_export", array( $this, 'ajax_run_export' ) );
 	}
 
 	/**
@@ -126,6 +129,26 @@ class Export {
 		// Output file content
 		readfile( $export_data['file'] );
 		exit;
+	}
+
+    /**
+	 * Trigger the export manually if Cron is slow.
+	 */
+	public function ajax_run_export() {
+		check_ajax_referer( "{$this->namespace}_{$this->collection}_export" );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( 'Unauthorized', 403 );
+		}
+
+		$params = isset( $_POST['params'] ) ? map_deep( $_POST['params'], 'sanitize_text_field' ) : array();
+		$result = $this->schedule_export_task( $params );
+
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( $result->get_error_message() );
+		}
+
+		wp_send_json_success( array( 'message' => 'Export started in background.' ) );
 	}
 
 	/**
