@@ -610,11 +610,6 @@ class REST_Controller extends \WP_REST_Controller {
 			$items[] = $this->prepare_response_for_collection( $data );
 		}
 
-		$per_page = (int) $query->query_vars['per_page'];
-		$total    = (int) $query->get_total();
-		$paged    = (int) $query->query_vars['page'];
-
-		$max_pages = $total > 0 && $per_page > 0 ? ceil( $total / $per_page ) : 1;
 
 		$response = rest_ensure_response(
 			apply_filters(
@@ -625,6 +620,27 @@ class REST_Controller extends \WP_REST_Controller {
 				$this
 			)
 		);
+
+		// Add headers.
+		return $this->add_pagination_headers( $query, $response, $request );
+	}
+
+	/**
+	 * Adds pagination info.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param \Hizzle\Store\Query $query The query object.
+	 * @param \WP_REST_Response $response The response object.
+	 * @param \WP_REST_Request $request The request object.
+	 */
+	protected function add_pagination_headers( $query, $response, $request ) {
+
+		$per_page = (int) $query->query_vars['per_page'];
+		$total    = (int) $query->get_total();
+		$paged    = (int) $query->query_vars['page'];
+
+		$max_pages = $total > 0 && $per_page > 0 ? ceil( $total / $per_page ) : 1;
 
 		// Add headers.
 		$response->header( 'X-WP-Total', $total );
@@ -1037,9 +1053,8 @@ class REST_Controller extends \WP_REST_Controller {
 	 * @return \WP_REST_Response|WP_Error Response object on success, or WP_Error object on failure.
 	 */
 	public function prepare_item_for_response( $item, $request ) {
-		$fields  = isset( $request['__fields'] ) ? wp_parse_list( $request['__fields'] ) : $this->get_fields_for_response( $request );
-		$data    = array();
-		$context = ! empty( $request['context'] ) ? $request['context'] : 'view';
+		$fields = isset( $request['__fields'] ) ? wp_parse_list( $request['__fields'] ) : $this->get_fields_for_response( $request );
+		$data   = array();
 
 		foreach ( $item->get_data() as $key => $value ) {
 			if ( rest_is_field_included( $key, $fields ) ) {
@@ -1477,8 +1492,15 @@ class REST_Controller extends \WP_REST_Controller {
 		$collection = $this->fetch_collection();
 
 		try {
-			$query = $collection->query( $request->get_params() );
-			return rest_ensure_response( $query->get_aggregate() );
+			$query    = $collection->query( $request->get_params() );
+			$response = rest_ensure_response( $query->get_aggregate() );
+
+			// Add pagination headers if per_page was set.
+			if ( ! empty( $query->query_vars['per_page'] ) ) {
+				$response = $this->add_pagination_headers( $query, $response, $request );
+			}
+
+			return $response;
 		} catch ( Store_Exception $e ) {
 			return new \WP_Error( $e->getErrorCode(), $e->getMessage(), $e->getErrorData() );
 		}
