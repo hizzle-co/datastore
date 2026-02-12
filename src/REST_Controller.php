@@ -23,6 +23,20 @@ class REST_Controller extends \WP_REST_Controller {
 	protected $admin_routes_prefix;
 
 	/**
+	 * Flag to track if export hooks are registered.
+	 *
+	 * @var bool
+	 */
+	protected static $export_hooks_registered = false;
+
+	/**
+	 * Data exporter.
+	 *
+	 * @var Export
+	 */
+	public $exporter;
+
+	/**
 	 * Loads the class.
 	 *
 	 * @param string $namespace The store's namespace.
@@ -34,6 +48,9 @@ class REST_Controller extends \WP_REST_Controller {
 
 		// Set the admin routes prefix.
 		$this->admin_routes_prefix = '/' . $store_namespace . '/' . $collection;
+
+		// Data exporter.
+		$this->exporter = new Export( $store_namespace, $collection );
 
 		// Register rest routes.
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
@@ -390,6 +407,42 @@ class REST_Controller extends \WP_REST_Controller {
 					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( $this, 'get_collection_table_schema' ),
 					'permission_callback' => array( $this, 'get_items_permissions_check' ),
+				),
+				'schema' => '__return_empty_array',
+			)
+		);
+
+		// Method to export data as CSV.
+		register_rest_route(
+			$this->namespace,
+			'/' . $this->rest_base . '/export',
+			array(
+				array(
+					'methods'             => \WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'export_items' ),
+					'permission_callback' => array( $this, 'get_items_permissions_check' ),
+					'args'                => $collection_params,
+				),
+				'schema' => '__return_empty_array',
+			)
+		);
+
+		// Method to download exported CSV file.
+		register_rest_route(
+			$this->namespace,
+			'/' . $this->rest_base . '/export/download/(?P<token>[a-zA-Z0-9]+)',
+			array(
+				'args'   => array(
+					'token' => array(
+						'description' => __( 'Download token for the exported file.', 'hizzle-store' ),
+						'type'        => 'string',
+						'required'    => true,
+					),
+				),
+				array(
+					'methods'             => \WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'download_export' ),
+					'permission_callback' => array( $this, 'download_export_permissions_check' ),
 				),
 				'schema' => '__return_empty_array',
 			)
@@ -1658,5 +1711,50 @@ class REST_Controller extends \WP_REST_Controller {
 	 */
 	protected function prefix_hook( $hook ) {
 		return 'hizzle_rest_' . $this->get_normalized_rest_base() . '_' . $hook;
+	}
+
+	/**
+	 * Exports items as CSV.
+	 *
+	 * @param \WP_REST_Request $request Full details about the request.
+	 * @return \WP_Error|\WP_REST_Response Response object on success, or WP_Error object on failure.
+	 */
+	public function export_items( $request ) {
+		$collection = $this->fetch_collection();
+
+		if ( empty( $collection ) ) {
+			return new \WP_Error( 'collection_not_found', __( 'Collection not found.', 'hizzle-store' ), array( 'status' => 404 ) );
+		}
+
+		// Schedule the background task.
+		wp_remote_get(
+			add_query_arg(
+				array(
+					'action'      => self::TASK_HOOK,
+					'_ajax_nonce' => wp_create_nonce( self::TASK_HOOK ),
+				),
+				admin_url( 'admin-ajax.php' )
+			),
+			array(
+				'timeout'   => 0.01,
+				'blocking'  => false,
+				'sslverify' => false,
+				'cookies'   => $_COOKIE,
+			)
+		);
+
+		$export_id = $this->exporter->schedule_export_task( $request->get_params() );
+
+		if ( is_wp_error( $export_id ) ) {
+			return $export_id;
+		}
+
+		return rest_ensure_response(
+			array(
+				'success'   => true,
+				'message'   => __( 'Export task has been scheduled. You will receive an email with the download link shortly.', 'hizzle-store' ),
+				'export_id' => $export_id,
+			)
+		);
 	}
 }
