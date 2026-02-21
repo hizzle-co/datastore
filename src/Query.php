@@ -555,7 +555,8 @@ class Query {
 				}
 
 				// Bypass MySQL ONLY_FULL_GROUP_BY mode by selecting any value for non-aggregated fields that are not in the GROUP BY clause.
-				$this->query_fields[] = sprintf( 'ANY_VALUE(%s) as `%s`', $table_field, esc_sql( str_replace( '.', '_', $field ) ) );
+				// ANY_VALUE is not supported in all MySQL versions, so we use MIN.
+				$this->query_fields[] = sprintf( 'MIN(%s) as `%s`', $table_field, esc_sql( str_replace( '.', '_', $field ) ) );
 			}
 		}
 
