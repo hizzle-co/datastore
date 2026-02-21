@@ -952,6 +952,13 @@ class Query {
 		if ( $search ) {
 			trim( $search, '*' );
 
+			// If search is <$email>, remove the angle brackets to allow searching by email.
+			if ( preg_match( '/^<(.+)>$/', $search, $matches ) ) {
+				if ( is_email( $matches[1] ) ) {
+					$search = $matches[1];
+				}
+			}
+
 			$search_columns = array();
 			if ( $qv['search_columns'] ) {
 				$search_columns = array_intersect( $qv['search_columns'], $all_fields );
@@ -1018,6 +1025,21 @@ class Query {
 				$searches[] = $wpdb->prepare( "$field_name = %s", $string ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			} else {
 				$searches[] = $wpdb->prepare( "$field_name LIKE %s", $like ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+				// Is the user searching by a display name but the collection only has first_name and last_name fields?
+				if ( 'first_name' === $col || 'last_name' === $col ) {
+					$name = explode( ' ', $string, 2 );
+
+					if ( 'first_name' === $col && ! empty( $name[0] ) ) {
+						$name       = $wpdb->esc_like( $name[0] ) . '%';
+						$searches[] = $wpdb->prepare( "{$this->prefix_field( 'first_name' )} LIKE %s", $name ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+					}
+
+					if ( 'last_name' === $col && ! empty( $name[1] ) ) {
+						$name       = $wpdb->esc_like( $name[1] ) . '%';
+						$searches[] = $wpdb->prepare( "{$this->prefix_field( 'last_name' )} LIKE %s", $name ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+					}
+				}
 			}
 		}
 
