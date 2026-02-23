@@ -33,10 +33,10 @@ class Export {
 	 * @param string $store_namespace Store namespace without the /v1 suffix.
 	 * @param string $collection Collection name.
 	 * @param array $query_args Query arguments.
-	 * @param int $user_id User ID that initiated the export.
+	 * @param string $email The email to notify when the export is complete.
 	 * @return string|false Job ID on success, false on failure.
 	 */
-	public static function queue( $store_namespace, $collection, $query_args, $user_id = 0 ) {
+	public static function queue( $store_namespace, $collection, $query_args, $email = '' ) {
 		$job_id     = microtime( true );
 		$query_args = self::sanitize_query_args( (array) $query_args );
 		$uploads    = wp_upload_dir( null, false );
@@ -51,7 +51,7 @@ class Export {
 			'store_namespace' => $store_namespace,
 			'collection'      => $collection,
 			'query_args'      => self::sanitize_query_args( (array) $query_args ),
-			'user_id'         => (int) $user_id,
+			'email'           => $email,
 			'created_at'      => time(),
 			'fields'          => wp_parse_list( $query_args['__fields'] ?? '' ),
 			'file_path'       => trailingslashit( $path ) . sanitize_key( $store_namespace ) . '-' . sanitize_key( $collection ) . '-' . $job_id . '.csv',
@@ -367,6 +367,26 @@ class Export {
 	private static function finish_job( $job_id, $job, $status ) {
 		delete_option( self::get_job_option_name( $job_id ) );
 		do_action( 'hizzle_store_background_export_finished', $job_id, $job, $status );
+	}
+
+	/**
+	 * Fails a job, cleans up, and notifies the requester.
+	 *
+	 * @param string $job_id Job ID.
+	 * @param array $job Job data.
+	 * @param string $message Failure message.
+	 */
+	private static function fail_job( $job_id, $job, $message ) {
+		delete_option( self::get_job_option_name( $job_id ) );
+		wp_clear_scheduled_hook( self::CRON_HOOK, array( $job_id ) );
+		self::release_lock( $job_id );
+
+		$email = isset( $job['email'] ) ? sanitize_email( $job['email'] ) : '';
+		if ( $email ) {
+			wp_mail( $email, 'Export failed', wp_kses_post( $message ) );
+		}
+
+		do_action( 'hizzle_store_background_export_failed', $job_id, $job, $message );
 	}
 
 	/**

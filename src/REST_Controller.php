@@ -602,7 +602,14 @@ class REST_Controller extends \WP_REST_Controller {
 
 		if ( rest_sanitize_boolean( $request['background_export'] ?? false ) ) {
 			$store_namespace = trim( $this->namespace, '/v1' );
-			Export::queue( $store_namespace, $this->rest_base, $request->get_params(), get_current_user_id() );
+
+			$email = $request['email'];
+			if ( empty( $email ) || ! is_email( $email ) ) {
+				$user  = wp_get_current_user();
+				$email = $user->user_email;
+			}
+
+			Export::queue( $store_namespace, $this->rest_base, $request->get_params(), $email );
 			return rest_ensure_response( array() );
 		}
 
