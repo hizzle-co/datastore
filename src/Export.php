@@ -37,7 +37,7 @@ class Export {
 	 * @return string|false Job ID on success, false on failure.
 	 */
 	public static function queue( $store_namespace, $collection, $query_args, $email = '' ) {
-		$job_id     = microtime( true );
+		$job_id     = uniqid( time() );
 		$query_args = self::sanitize_query_args( (array) $query_args );
 		$uploads    = wp_upload_dir( null, false );
 		$path       = trailingslashit( $uploads['basedir'] ) . sanitize_key( $store_namespace );
@@ -54,7 +54,7 @@ class Export {
 			'email'           => $email,
 			'created_at'      => time(),
 			'fields'          => wp_parse_list( $query_args['__fields'] ?? '' ),
-			'file_path'       => trailingslashit( $path ) . sanitize_key( $store_namespace ) . '-' . sanitize_key( $collection ) . '-' . $job_id . '.csv',
+			'file_path'       => trailingslashit( $path ) . sanitize_key( $store_namespace ) . '-' . sanitize_key( $collection ) . '-' . sanitize_key( $job_id ) . '.csv',
 		);
 
 		// Maybe protect the export directory with an .htaccess file.
@@ -84,6 +84,7 @@ class Export {
 			add_query_arg(
 				array(
 					'action'      => self::CRON_HOOK,
+					'job_id'      => $job_id,
 					'_ajax_nonce' => wp_create_nonce( self::CRON_HOOK . '_' . $job_id ),
 				),
 				admin_url( 'admin-ajax.php' )
@@ -174,43 +175,40 @@ class Export {
 				return;
 			}
 
-			/** @var Record[] $records */
-			foreach ( $records as $item ) {
-				$to_save = array();
+			$to_save = array();
 
-				foreach ( $fields as $field ) {
-					$value = $item->get( $field, 'edit' );
+			foreach ( $fields as $field ) {
+				$value = $record->get( $field, 'edit' );
 
-					// If value is a date, convert it to the ISO8601 format.
-					if ( $value instanceof \DateTime ) {
-						$value = $value->format( 'Y-m-d\TH:i:sP' );
+				// If value is a date, convert it to the ISO8601 format.
+				if ( $value instanceof \DateTime ) {
+					$value = $value->format( 'Y-m-d\TH:i:sP' );
 
-						// If value contains 00:00:00, remove the time.
-						if ( false !== strpos( $value, '00:00:00' ) ) {
-							$value = substr( $value, 0, 10 );
-						}
+					// If value contains 00:00:00, remove the time.
+					if ( false !== strpos( $value, '00:00:00' ) ) {
+						$value = substr( $value, 0, 10 );
 					}
-
-					if ( is_bool( $value ) ) {
-						$value = (int) $value;
-					}
-
-					// Check if this is an array of scalars.
-					if ( is_array( $value ) && ! is_array( current( $value ) ) ) {
-						$value = implode( ',', $value );
-					}
-
-					// Convert non-scalar values to JSON.
-					if ( ! is_scalar( $value ) ) {
-						$value = maybe_serialize( $value );
-					}
-
-					$to_save[ $field ] = $value;
 				}
 
-				self::save_record( $job['file_path'], $to_save, $fields );
-				++$job['query_args']['offset'];
+				if ( is_bool( $value ) ) {
+					$value = (int) $value;
+				}
+
+				// Check if this is an array of scalars.
+				if ( is_array( $value ) && ! is_array( current( $value ) ) ) {
+					$value = implode( ',', $value );
+				}
+
+				// Convert non-scalar values to JSON.
+				if ( ! is_scalar( $value ) ) {
+					$value = maybe_serialize( $value );
+				}
+
+				$to_save[ $field ] = $value;
 			}
+
+			self::save_record( $job['file_path'], $to_save, $fields );
+			++$job['query_args']['offset'];
 		} while ( microtime( true ) - $start_time < self::MAX_RUNTIME && ! self::is_memory_near_limit() );
 
 		// Release the lock.
