@@ -366,6 +366,36 @@ class Export {
 	 */
 	private static function finish_job( $job_id, $job, $status ) {
 		delete_option( self::get_job_option_name( $job_id ) );
+		wp_clear_scheduled_hook( self::CRON_HOOK, array( $job_id ) );
+		self::release_lock( $job_id );
+
+		$email = isset( $job['email'] ) ? sanitize_email( $job['email'] ) : '';
+		if ( $email && ! empty( $job['file_path'] ) ) {
+			$file_path = $job['file_path'];
+			$uploads   = wp_upload_dir( null, false );
+			$download  = '';
+
+			if ( ! empty( $uploads['basedir'] ) && ! empty( $uploads['baseurl'] ) ) {
+				$download = str_replace( $uploads['basedir'], $uploads['baseurl'], $file_path );
+			}
+
+			$subject = 'Your export is ready';
+			$body    = 'Your export is complete.';
+			if ( $download ) {
+				$body .= "\n\n" . sprintf( 'Download: %s', esc_url_raw( $download ) );
+			}
+
+			$attachments = array();
+			if ( file_exists( $file_path ) ) {
+				$size = filesize( $file_path );
+				if ( false !== $size && $size <= 10 * 1024 * 1024 ) {
+					$attachments[] = $file_path;
+				}
+			}
+
+			wp_mail( $email, $subject, $body, array(), $attachments );
+		}
+
 		do_action( 'hizzle_store_background_export_finished', $job_id, $job, $status );
 	}
 
