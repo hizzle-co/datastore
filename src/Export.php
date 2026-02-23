@@ -43,7 +43,7 @@ class Export {
 		$job_id     = uniqid( time() );
 		$query_args = self::sanitize_query_args( (array) $query_args );
 		$uploads    = wp_upload_dir( null, false );
-		$path       = trailingslashit( $uploads['basedir'] ) . sanitize_key( $store_namespace );
+		$path       = trailingslashit( $uploads['basedir'] ) . trailingslashit( sanitize_key( $store_namespace ) ) . sanitize_key( $collection );
 
 		if ( ! wp_mkdir_p( $path ) ) {
 			return false;
@@ -110,7 +110,7 @@ class Export {
 		// Don't lock up other requests while processing.
 		session_write_close();
 
-		$job_id = $_POST['job_id'] ?? '';
+		$job_id = $_GET['job_id'] ?? '';
 
 		if ( empty( $job_id ) ) {
 			wp_die();
@@ -363,9 +363,8 @@ class Export {
 	 *
 	 * @param string $job_id Job ID.
 	 * @param array $job Job data.
-	 * @param string $status Status string.
 	 */
-	private static function finish_job( $job_id, $job, $status ) {
+	private static function finish_job( $job_id, $job ) {
 		wp_clear_scheduled_hook( self::CRON_HOOK, array( $job_id ) );
 		self::release_lock( $job_id );
 
@@ -391,7 +390,7 @@ class Export {
 			wp_mail( $email, $subject, $body, array(), $attachments );
 		}
 
-		do_action( 'hizzle_store_background_export_finished', $job_id, $job, $status );
+		do_action( 'hizzle_store_background_export_finished', $job_id, $job );
 	}
 
 	/**
@@ -433,7 +432,7 @@ class Export {
 	 */
 	private static function schedule_cleanup( $job_id ) {
 		if ( ! wp_next_scheduled( self::CLEANUP_HOOK, array( $job_id ) ) ) {
-			wp_schedule_single_event( time() + WEEK_IN_SECONDS, self::CLEANUP_HOOK, array( $job_id ) );
+			wp_schedule_single_event( time() + MONTH_IN_SECONDS, self::CLEANUP_HOOK, array( $job_id ) );
 		}
 	}
 
@@ -469,20 +468,6 @@ class Export {
 		}
 
 		do_action( 'hizzle_store_background_export_failed', $job_id, $job, $message );
-	}
-
-	/**
-	 * Determines if the current run should pause.
-	 *
-	 * @param float $start_time Start time in seconds.
-	 * @return bool
-	 */
-	private static function should_pause( $start_time ) {
-		if ( ( microtime( true ) - $start_time ) >= self::MAX_RUNTIME ) {
-			return true;
-		}
-
-		return self::is_memory_near_limit();
 	}
 
 	/**
