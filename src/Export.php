@@ -10,6 +10,7 @@ defined( 'ABSPATH' ) || exit;
 class Export {
 
 	const CRON_HOOK          = 'hizzle_store_background_export';
+	const CLEANUP_HOOK       = 'hizzle_store_background_export_cleanup';
 	const OPTION_PREFIX      = 'hizzle_store_background_export_';
 	const DEFAULT_BATCH_SIZE = 50;
 	const LOCK_TTL           = 80;
@@ -23,8 +24,10 @@ class Export {
 	 */
 	public static function init() {
 		add_action( self::CRON_HOOK, array( __CLASS__, 'run' ) );
+		add_action( self::CLEANUP_HOOK, array( __CLASS__, 'cleanup_job' ), 10, 1 );
 		add_action( 'wp_ajax_' . self::CRON_HOOK, array( __CLASS__, 'maybe_handle_via_ajax' ) );
 		add_action( 'wp_ajax_nopriv_' . self::CRON_HOOK, array( __CLASS__, 'maybe_handle_via_ajax' ) );
+		add_action( 'template_redirect', array( __CLASS__, 'maybe_handle_download' ) );
 	}
 
 	/**
@@ -363,25 +366,19 @@ class Export {
 	 * @param string $status Status string.
 	 */
 	private static function finish_job( $job_id, $job, $status ) {
-		delete_option( self::get_job_option_name( $job_id ) );
 		wp_clear_scheduled_hook( self::CRON_HOOK, array( $job_id ) );
 		self::release_lock( $job_id );
+
+		self::schedule_cleanup( $job_id );
 
 		$email = isset( $job['email'] ) ? sanitize_email( $job['email'] ) : '';
 		if ( $email && ! empty( $job['file_path'] ) ) {
 			$file_path = $job['file_path'];
-			$uploads   = wp_upload_dir( null, false );
-			$download  = '';
-
-			if ( ! empty( $uploads['basedir'] ) && ! empty( $uploads['baseurl'] ) ) {
-				$download = str_replace( $uploads['basedir'], $uploads['baseurl'], $file_path );
-			}
+			$download  = add_query_arg( array( 'hizzle_export' => $job_id ), home_url( '/' ) );
 
 			$subject = 'Your export is ready';
 			$body    = 'Your export is complete.';
-			if ( $download ) {
-				$body .= "\n\n" . sprintf( 'Download: %s', esc_url_raw( $download ) );
-			}
+			$body   .= "\n\n" . sprintf( 'Download: %s', esc_url_raw( $download ) );
 
 			$attachments = array();
 			if ( file_exists( $file_path ) ) {
@@ -395,6 +392,63 @@ class Export {
 		}
 
 		do_action( 'hizzle_store_background_export_finished', $job_id, $job, $status );
+	}
+
+	/**
+	 * Handles download requests for completed exports.
+	 */
+	public static function maybe_handle_download() {
+		$job_id = isset( $_GET['hizzle_export'] ) ? sanitize_text_field( wp_unslash( $_GET['hizzle_export'] ) ) : '';
+		if ( empty( $job_id ) ) {
+			return;
+		}
+
+		if ( ! is_user_logged_in() ) {
+			auth_redirect();
+		}
+
+		$job = get_option( self::get_job_option_name( $job_id ) );
+		if ( empty( $job ) || empty( $job['file_path'] ) ) {
+			wp_die( 'Export not found.', 404 );
+		}
+
+		$file_path = $job['file_path'];
+		if ( ! file_exists( $file_path ) ) {
+			wp_die( 'Export file missing.', 404 );
+		}
+
+		nocache_headers();
+		header( 'Content-Type: text/csv; charset=utf-8' );
+		header( 'Content-Disposition: attachment; filename="' . basename( $file_path ) . '"' );
+		header( 'Content-Length: ' . filesize( $file_path ) );
+
+		readfile( $file_path );
+		exit;
+	}
+
+	/**
+	 * Schedules a cleanup for a completed export.
+	 *
+	 * @param string $job_id Job ID.
+	 */
+	private static function schedule_cleanup( $job_id ) {
+		if ( ! wp_next_scheduled( self::CLEANUP_HOOK, array( $job_id ) ) ) {
+			wp_schedule_single_event( time() + WEEK_IN_SECONDS, self::CLEANUP_HOOK, array( $job_id ) );
+		}
+	}
+
+	/**
+	 * Deletes export file and job option after the retention period.
+	 *
+	 * @param string $job_id Job ID.
+	 */
+	public static function cleanup_job( $job_id ) {
+		$job = get_option( self::get_job_option_name( $job_id ) );
+		if ( ! empty( $job['file_path'] ) && file_exists( $job['file_path'] ) ) {
+			@unlink( $job['file_path'] );
+		}
+
+		delete_option( self::get_job_option_name( $job_id ) );
 	}
 
 	/**
