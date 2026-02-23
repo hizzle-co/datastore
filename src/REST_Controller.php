@@ -37,6 +37,9 @@ class REST_Controller extends \WP_REST_Controller {
 
 		// Register rest routes.
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
+
+		// Background export cron handlers.
+		Export::init();
 	}
 
 	/**
@@ -597,6 +600,12 @@ class REST_Controller extends \WP_REST_Controller {
 	public function get_items( $request ) {
 		$collection = $this->fetch_collection();
 
+		if ( rest_sanitize_boolean( $request['background_export'] ?? false ) ) {
+			$store_namespace = trim( $this->namespace, '/v1' );
+			Export::queue( $store_namespace, $this->rest_base, $request->get_params(), get_current_user_id() );
+			return rest_ensure_response( array() );
+		}
+
 		try {
 			$query = $collection->query( $request->get_params() );
 		} catch ( Store_Exception $e ) {
@@ -609,7 +618,6 @@ class REST_Controller extends \WP_REST_Controller {
 			$data    = $this->prepare_item_for_response( $item, $request );
 			$items[] = $this->prepare_response_for_collection( $data );
 		}
-
 
 		$response = rest_ensure_response(
 			apply_filters(
