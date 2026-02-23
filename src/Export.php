@@ -34,13 +34,17 @@ class Export {
 	 * @param string $collection Collection name.
 	 * @param array $query_args Query arguments.
 	 * @param int $user_id User ID that initiated the export.
-	 * @return string Job ID.
+	 * @return string|false Job ID on success, false on failure.
 	 */
 	public static function queue( $store_namespace, $collection, $query_args, $user_id = 0 ) {
 		$job_id     = microtime( true );
 		$query_args = self::sanitize_query_args( (array) $query_args );
 		$uploads    = wp_upload_dir( null, false );
-		$path       = trailingslashit( $uploads['basedir'] ) . '/' . sanitize_key( $store_namespace );
+		$path       = trailingslashit( $uploads['basedir'] ) . sanitize_key( $store_namespace );
+
+		if ( ! wp_mkdir_p( $path ) ) {
+			return false;
+		}
 
 		$job = array(
 			'id'              => $job_id,
@@ -55,7 +59,7 @@ class Export {
 
 		// Maybe protect the export directory with an .htaccess file.
 		if ( ! file_exists( $path . '/.htaccess' ) ) {
-			self::maybe_htaccess_protect( $path );
+			self::htaccess_protect( $path );
 		}
 
 		update_option( self::get_job_option_name( $job_id ), $job, false );
@@ -276,11 +280,6 @@ class Export {
 	 * @param array $fields Field order.
 	 */
 	private static function save_record( $file_path, $to_save, $fields ) {
-		$dir = dirname( $file_path );
-
-		if ( ! wp_mkdir_p( $dir ) ) {
-			return;
-		}
 
 		$is_new_file = ! file_exists( $file_path ) || 0 === filesize( $file_path );
 		$handle      = fopen( $file_path, 'ab' );
@@ -309,6 +308,28 @@ class Export {
 		}
 
 		fclose( $handle );
+	}
+
+	/**
+	 * Writes an .htaccess file to prevent direct access to export files.
+	 *
+	 * @param string $path Directory path.
+	 */
+	private static function htaccess_protect( $path ) {
+		$htaccess_path = trailingslashit( $path ) . '.htaccess';
+		$rules = array(
+			'# Block direct access to exports.',
+			'Options -Indexes',
+			'<IfModule mod_authz_core.c>',
+			'Require all denied',
+			'</IfModule>',
+			'<IfModule !mod_authz_core.c>',
+			'Deny from all',
+			'</IfModule>',
+			'',
+		);
+
+		file_put_contents( $htaccess_path, implode( "\n", $rules ), LOCK_EX );
 	}
 
 	/**
