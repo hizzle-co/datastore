@@ -39,6 +39,8 @@ class Export {
 	public static function queue( $store_namespace, $collection, $query_args, $user_id = 0 ) {
 		$job_id     = microtime( true );
 		$query_args = self::sanitize_query_args( (array) $query_args );
+		$uploads    = wp_upload_dir( null, false );
+		$path       = trailingslashit( $uploads['basedir'] ) . '/' . sanitize_key( $store_namespace );
 
 		$job = array(
 			'id'              => $job_id,
@@ -48,7 +50,13 @@ class Export {
 			'user_id'         => (int) $user_id,
 			'created_at'      => time(),
 			'fields'          => wp_parse_list( $query_args['__fields'] ?? '' ),
+			'file_path'       => trailingslashit( $path ) . sanitize_key( $store_namespace ) . '-' . sanitize_key( $collection ) . '-' . $job_id . '.csv',
 		);
+
+		// Maybe protect the export directory with an .htaccess file.
+		if ( ! file_exists( $path . '/.htaccess' ) ) {
+			self::maybe_htaccess_protect( $path );
+		}
 
 		update_option( self::get_job_option_name( $job_id ), $job, false );
 		self::schedule_next( $job_id );
@@ -196,7 +204,7 @@ class Export {
 					$to_save[ $field ] = $value;
 				}
 
-				self::save_record( $to_save, $job_id );
+				self::save_record( $job['file_path'], $to_save, $fields );
 				++$job['query_args']['offset'];
 			}
 		} while ( microtime( true ) - $start_time < self::MAX_RUNTIME && ! self::is_memory_near_limit() );
@@ -258,6 +266,74 @@ class Export {
 		$query_args['fields'] = 'all';
 
 		return $query_args;
+	}
+
+	/**
+	 * Writes a record to the export CSV file.
+	 *
+	 * @param string $file_path File path.
+	 * @param array $to_save Record data.
+	 * @param array $fields Field order.
+	 */
+	private static function save_record( $file_path, $to_save, $fields ) {
+		$dir = dirname( $file_path );
+
+		if ( ! wp_mkdir_p( $dir ) ) {
+			return;
+		}
+
+		$is_new_file = ! file_exists( $file_path ) || 0 === filesize( $file_path );
+		$handle      = fopen( $file_path, 'ab' );
+		if ( false === $handle ) {
+			return;
+		}
+
+		if ( function_exists( 'flock' ) ) {
+			flock( $handle, LOCK_EX );
+		}
+
+		if ( $is_new_file ) {
+			fputcsv( $handle, array_map( array( __CLASS__, 'escape_csv_value' ), $fields ) );
+		}
+
+		$row = array();
+		foreach ( $fields as $field ) {
+			$row[] = self::escape_csv_value( $to_save[ $field ] ?? '' );
+		}
+
+		fputcsv( $handle, $row );
+		fflush( $handle );
+
+		if ( function_exists( 'flock' ) ) {
+			flock( $handle, LOCK_UN );
+		}
+
+		fclose( $handle );
+	}
+
+	/**
+	 * Sanitizes a CSV value for spreadsheet formula injection.
+	 *
+	 * @param mixed $value Value to sanitize.
+	 * @return string
+	 */
+	private static function escape_csv_value( $value ) {
+		if ( null === $value ) {
+			$value = '';
+		}
+
+		if ( is_bool( $value ) ) {
+			$value = $value ? '1' : '0';
+		}
+
+		$value   = (string) $value;
+		$trimmed = ltrim( $value );
+
+		if ( '' !== $trimmed && ( preg_match( '/^[=+\-@]/', $trimmed ) || 0 === strpos( $trimmed, "\t" ) ) ) {
+			$value = "'" . $value;
+		}
+
+		return $value;
 	}
 
 	/**
