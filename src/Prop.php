@@ -1,13 +1,13 @@
 <?php
 
-namespace Hizzle\Store;
-
 /**
  * Store API: Manages a single property.
  *
  * @since   1.0.0
  * @package Hizzle\Store
  */
+
+namespace Hizzle\Store;
 
 // Exit if accessed directly.
 defined( 'ABSPATH' ) || exit;
@@ -303,7 +303,7 @@ class Prop {
 		} elseif ( $this->is_meta_key ) {
 			$schema['type'] = $this->is_meta_key_multiple ? 'array' : 'string';
 		} elseif ( $this->is_boolean() ) {
-			$schema['type'] = array( 'boolean', 'int' );
+			$schema['type'] = array( 'boolean', 'integer' );
 		} elseif ( $this->is_numeric() ) {
 			$schema['type'] = 'integer';
 
@@ -326,7 +326,6 @@ class Prop {
 
 		// Nullable.
 		if ( $this->nullable || null !== $this->default || $this->is_meta_key || $this->is_dynamic ) {
-
 			if ( is_array( $schema['type'] ) ) {
 				$schema['type'][] = 'null';
 			} else {
@@ -409,7 +408,6 @@ class Prop {
 
 		// Dates.
 		if ( $this->is_date() && ! $this->is_meta_key ) {
-
 			$query_schema[ "{$this->name}_before" ] = array(
 				'description'       => sprintf(
 					// translators: Placeholder %s is the property name.
@@ -435,12 +433,10 @@ class Prop {
 				'type'              => 'object',
 				'validate_callback' => 'rest_validate_request_arg',
 			);
-
 		}
 
 		// Numbers & Floats.
 		if ( $this->is_float() && ! $this->is_meta_key ) {
-
 			$query_schema[ "{$this->name}_min" ] = array(
 				'description'       => sprintf(
 					// translators: Placeholder %s is the property name.
@@ -544,7 +540,6 @@ class Prop {
 	public function flip_option( $value, $choices ) {
 
 		if ( is_string( $value ) ) {
-
 			if ( isset( $choices[ $value ] ) ) {
 				return $value;
 			}
@@ -601,7 +596,6 @@ class Prop {
 		}
 
 		if ( $this->is_boolean() ) {
-
 			if ( 'yes' === $value || 'true' === $value || '1' === $value ) {
 				return true;
 			}
