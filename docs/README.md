@@ -81,7 +81,7 @@ Main::instance('my_store')->init_store(
 );
 
 // Work with records
-$customer = Main::instance('my_store')->get('customers',123);
+$customer = Main::instance('my_store')->get(123, 'customers');
 $customers = Main::instance('my_store')->query('customers', array('status' => 'active'));
 ```
 
@@ -164,7 +164,7 @@ $customer_id = $customer->get_id();
 $db = Main::instance('my_store');
 
 // Get a single record by ID
-$customer = $db->get('customers', $customer_id);
+$customer = $db->get($customer_id, 'customers');
 
 if ($customer && !is_wp_error($customer)) {
     echo $customer->get('name');
@@ -180,7 +180,7 @@ $customer_id = $db->get_id_by_prop('email', 'john@example.com', 'customers');
 
 ```php
 // Using Main class with record object
-$customer = Main::instance('my_store')->get('customers',$customer_id);
+$customer = Main::instance('my_store')->get($customer_id, 'customers');
 
 if ($customer && !is_wp_error($customer)) {
     $customer->set('name', 'Jane Doe');
@@ -210,7 +210,7 @@ $db->delete_where(
 $db->delete_all('customers');
 
 // Or via record object
-$customer = $db->get('customers', $customer_id);
+$customer = $db->get($customer_id, 'customers');
 if ($customer && !is_wp_error($customer)) {
     $customer->delete();
 }
@@ -300,7 +300,7 @@ use Hizzle\Store\Main;
 
 // Main class automatically returns WP_Error on failure
 $db = Main::instance('my_store');
-$customer = $db->get('customers', $customer_id);
+$customer = $db->get($customer_id, 'customers');
 
 if (is_wp_error($customer)) {
     error_log($customer->get_error_message());

@@ -86,7 +86,7 @@ Retrieves a record from the database.
 **Example:**
 ```php
 $db = Main::instance('my_store');
-$order = $db->get('orders', 123);
+$order = $db->get(123, 'orders');
 
 if (is_wp_error($order)) {
     error_log($order->get_error_message());
@@ -112,7 +112,7 @@ $db = Main::instance('my_store');
 $order_id = $db->get_id_by_prop('order_number', 'ORD-12345', 'orders');
 
 if ($order_id) {
-    $order = $db->get('orders', $order_id);
+	$order = $db->get($order_id, 'orders');
 }
 ```
 
@@ -340,7 +340,7 @@ $order = $collection->create(array(
 $order_id = $order->get_id();
 
 // Get order
-$order = $db->get('orders', $order_id);
+$order = $db->get($order_id, 'orders');
 
 if (is_wp_error($order)) {
     wp_die($order->get_error_message());
@@ -393,7 +393,7 @@ $deleted = $db->delete_where(
 $db = Main::instance('shop');
 
 // Get a record
-$order = $db->get('orders', $order_id);
+$order = $db->get($order_id, 'orders');
 
 if (is_wp_error($order)) {
     // Log error
