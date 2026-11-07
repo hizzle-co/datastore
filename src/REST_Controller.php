@@ -1100,11 +1100,20 @@ class REST_Controller extends \WP_REST_Controller {
 		$fields = isset( $request['__fields'] ) ? wp_parse_list( $request['__fields'] ) : $this->get_fields_for_response( $request );
 		$data   = array();
 
-		foreach ( $item->get_data() as $key => $value ) {
+		$known_fields = array_unique(
+			array_merge(
+				array( 'id', 'hizzlewp_actions' ),
+				wp_list_pluck( $item->get_collection()->get_props(), 'name' )
+			)
+		);
+
+		foreach ( $known_fields as $key ) {
 			if ( rest_is_field_included( $key, $fields ) ) {
+				$context = $request['context'] ?? 'view';
+				$value   = $item->get( $key, $context );
 
 				// If value is a date, convert it to the ISO8601 format.
-				if ( $value instanceof Date_Time ) {
+				if ( $value instanceof \DateTime ) {
 					$value = $value->format( 'Y-m-d\TH:i:sP' );
 
 					// If value contains 00:00:00, remove the time.
