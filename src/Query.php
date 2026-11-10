@@ -197,6 +197,7 @@ class Query {
 	/**
 	 * Retrieves a joined collection.
 	 *
+	 * @param string $join
 	 * @return Collection
 	 */
 	public function get_joined_collection( $join ) {
@@ -272,7 +273,7 @@ class Query {
 		$this->prepare_where_query( $qv, $table );
 
 		// Prepare meta query. After WHERE and JOINs have been prepared.
-		$this->prepare_meta_query( $qv, $table );
+		$this->prepare_meta_query( $qv );
 
 		// Sorting.
 		if ( ! empty( $query['orderby'] ) ) {
