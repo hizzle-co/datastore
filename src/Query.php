@@ -327,7 +327,7 @@ class Query {
 
 			// Determine the foreign field.
 			$foreign_key = ! empty( $join_config['foreign_key'] ) ? $join_config['foreign_key'] : 'id';
-			$foreign_key = $this->prefix_field( "{$requested_join}.$foreign_key", $related_collection );
+			$foreign_key = $this->prefix_field( "{$requested_join}.$foreign_key" );
 
 			if ( empty( $foreign_key ) ) {
 				throw new Store_Exception( 'query_invalid_field', 'Invalid foreign key field in JOIN config.' );
@@ -1052,20 +1052,25 @@ class Query {
 	 * @return mixed The UTC SQL datetime, or the original non-datetime value.
 	 */
 	private function date_to_gmt( $date, $field ) {
-		if ( ! $field->is_date_time() || null === $date || '' === $date || is_array( $date ) ) {
+		if ( null === $date || '' === $date || is_array( $date ) ) {
 			return $date;
 		}
 
 		if ( $date instanceof \DateTimeInterface ) {
-			return gmdate( 'Y-m-d H:i:s', $date->getTimestamp() );
+			return $field->is_date_time() ? gmdate( 'Y-m-d H:i:s', $date->getTimestamp() ) : $date->format( 'Y-m-d' );
+		}
+
+		// Unsupported objects, resources, and booleans must not reach date parsing.
+		if ( ! is_string( $date ) && ! is_numeric( $date ) ) {
+			return gmdate( 'Y-m-d H:i:s', 0 );
+		}
+
+		if ( ! $field->is_date_time() ) {
+			return $date;
 		}
 
 		if ( is_numeric( $date ) ) {
 			return gmdate( 'Y-m-d H:i:s', (int) $date );
-		}
-
-		if ( ! is_string( $date ) ) {
-			return $date;
 		}
 
 		$dt = date_create( $date, wp_timezone() );

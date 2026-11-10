@@ -622,12 +622,9 @@ class Prop {
 			return gmdate( 'Y-m-d', strtotime( $value ) );
 		}
 
-		if ( 'DATETIME' === $this->type ) {
-			return gmdate( 'Y-m-d H:i:s', strtotime( $value ) );
-		}
-
-		if ( 'TIMESTAMP' === $this->type ) {
-			return is_numeric( $value ) ? absint( $value ) : strtotime( $value );
+		if ( $this->is_date_time() ) {
+			$timestamp = is_numeric( $value ) ? (int) $value : strtotime( $value );
+			return gmdate( 'Y-m-d H:i:s', $timestamp );
 		}
 
 		// Var chars.

@@ -35,6 +35,7 @@ Supported data types include:
 - **decimal** - Decimal number (requires length like "10,2")
 - **float** - Floating-point number
 - **datetime** - Date and time
+- **timestamp** - MySQL timestamp; sanitized as a `Y-m-d H:i:s` string, including when input is a Unix timestamp
 - **date** - Date only
 - **time** - Time only
 - **bool** - Boolean (true/false)

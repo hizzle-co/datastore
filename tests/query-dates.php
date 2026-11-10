@@ -33,9 +33,11 @@ class Date_Query_Test_DB {
 	public $posts = 'wp_posts';
 	public $comments = 'wp_comments';
 	public $users = 'wp_users';
+	public $prepared_queries = array();
 
 	/** Substitute the placeholders used by the query builder. */
 	public function prepare( $sql, ...$values ) {
+		$this->prepared_queries[] = array( $sql, $values );
 		return preg_replace_callback( '/%[sdf]/', function ( $match ) use ( &$values ) {
 			$value = array_shift( $values );
 			return '%s' === $match[0] ? "'" . esc_sql( $value ) . "'" : (string) $value;
@@ -142,4 +144,50 @@ foreach ( array( 'occurred_at', 'occurred_at_not' ) as $key ) {
 	check_date_query( false !== strpos( $query->sql( array( $key => '2026-11-01 01:30:56-04:00' ) ), '2026-11-01 05:30:56' ), 'Custom sanitizers must receive UTC comparison values.' );
 }
 check_date_query( 2 === $calls, 'Scalar comparison sanitizers must still run.' );
+
+foreach ( array( 'DATETIME', 'TIMESTAMP' ) as $type ) {
+	$prop = new \Hizzle\Store\Prop( 'fixture', array( 'name' => 'date_value', 'type' => $type ) );
+	foreach ( array( 1784129696, '1784129696', '2026-07-15 15:34:56 UTC', '2026-07-15 18:34:56+03:00' ) as $value ) {
+		check_date_query( '2026-07-15 15:34:56' === $prop->sanitize( $value ), "$type must sanitize to a SQL datetime string." );
+	}
+	check_date_query( '1970-01-01 00:00:00' === $prop->sanitize( 0 ), "$type must preserve the Unix epoch." );
+	check_date_query( null === $prop->sanitize( null ), "$type must preserve null." );
+	$object = new DateTimeImmutable( '2026-07-15 15:34:56 UTC' );
+	check_date_query( $object === $prop->sanitize( $object ), 'Date objects must remain available to the storage layer.' );
+}
+
+$payloads = array( "2026-07-15' OR 1=1 --", "2026-07-15'); DROP TABLE test_records; --", "2026-07-15\\' OR SLEEP(5) #" );
+$collection->props['occurred_at']->sanitize_callback = null;
+foreach ( $payloads as $payload ) {
+	foreach ( array( 'occurred_at', 'occurred_at_not', 'occurred_at_before', 'occurred_at_after' ) as $key ) {
+		$sql = $query->sql( array( $key => $payload ) );
+		check_date_query( false === strpos( $sql, 'OR 1=1' ) && false === strpos( $sql, 'DROP TABLE' ) && false === strpos( $sql, 'SLEEP' ), 'Date strings must not carry SQL fragments into the generated query.' );
+	}
+	foreach ( array( 'occurred_at', 'occurred_at_not' ) as $key ) {
+		$sql = $query->sql( array( $key => array( $payload ) ) );
+		check_date_query( false !== strpos( $sql, "('1970-01-01 00:00:00')" ), 'Malformed datetime list values must become formatted dates.' );
+	}
+	$sql = $query->sql( array( 'occurred_at_query' => array( array( 'before' => $payload ) ) ) );
+	check_date_query( false !== strpos( $sql, "'1970-01-01 00:00:00'" ), 'Nested string boundaries must also discard SQL fragments.' );
+
+	// Even a custom sanitizer returning raw SQL-like text must use a value placeholder.
+	$collection->props['occurred_at']->sanitize_callback = function ( $value ) use ( $payload ) { return $payload; };
+	foreach ( array( 'occurred_at', 'occurred_at_not' ) as $key ) {
+		$query->sql( array( $key => '2026-07-15' ) );
+		$prepared = end( $GLOBALS['wpdb']->prepared_queries );
+		check_date_query( false !== strpos( $prepared[0], '%s' ) && false === strpos( $prepared[0], $payload ) && array( $payload ) === $prepared[1], 'Custom sanitizer output must remain separate from the SQL template.' );
+	}
+	$collection->props['occurred_at']->sanitize_callback = null;
+}
+$resource = fopen( 'php://memory', 'r+' );
+foreach ( array( new stdClass(), $resource, true ) as $unsupported ) {
+	foreach ( array( 'occurred_at', 'occurred_at_not', 'occurred_at_before', 'occurred_at_after', 'calendar_date_before', 'calendar_date_after' ) as $key ) {
+		check_date_query( false !== strpos( $query->sql( array( $key => $unsupported ) ), '1970-01-01 00:00:00' ), 'Unsupported values must use the invalid-date fallback without throwing.' );
+	}
+	foreach ( array( 'occurred_at', 'occurred_at_not' ) as $key ) {
+		check_date_query( false !== strpos( $query->sql( array( $key => array( $unsupported ) ) ), '1970-01-01 00:00:00' ), 'Unsupported list values must not reach SQL escaping.' );
+	}
+	check_date_query( false !== strpos( $query->sql( array( 'occurred_at_query' => array( array( 'before' => $unsupported ) ) ) ), '1970-01-01 00:00:00' ), 'Unsupported nested boundaries must not reach WordPress date parsing.' );
+}
+fclose( $resource );
 echo $GLOBALS['checks'] . " date query checks passed.\n";
