@@ -891,10 +891,16 @@ class Query {
 				if ( is_null( $qv[ $key ] ) || 'null' === $qv[ $key ] ) {
 					$this->query_where .= " AND $field_name IS NULL";
 				} elseif ( is_array( $qv[ $key ] ) ) {
+					if ( $field->is_date_time() ) {
+						foreach ( $qv[ $key ] as &$date ) {
+							$date = $this->date_to_gmt( $date, $field );
+						}
+						unset( $date );
+					}
 					$enums              = "'" . implode( "','", array_map( 'esc_sql', $qv[ $key ] ) ) . "'";
 					$this->query_where .= " AND $field_name IN ($enums)";
 				} else {
-					$value              = $field->sanitize( $qv[ $key ] );
+					$value              = $this->prepare_comparison_value( $qv[ $key ], $field );
 					$value              = is_bool( $value ) ? (int) $value : $value;
 					$this->query_where .= $wpdb->prepare( " AND $field_name=$data_type", $value ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 				}
@@ -905,10 +911,16 @@ class Query {
 				if ( is_null( $qv[ "{$key}_not" ] ) || 'null' === $qv[ "{$key}_not" ] ) {
 					$this->query_where .= " AND $field_name IS NOT NULL";
 				} elseif ( is_array( $qv[ "{$key}_not" ] ) ) {
+					if ( $field->is_date_time() ) {
+						foreach ( $qv[ "{$key}_not" ] as &$date ) {
+							$date = $this->date_to_gmt( $date, $field );
+						}
+						unset( $date );
+					}
 					$enums              = "'" . implode( "','", array_map( 'esc_sql', $qv[ "{$key}_not" ] ) ) . "'";
 					$this->query_where .= " AND $field_name NOT IN ($enums)";
 				} else {
-					$value              = $field->sanitize( $qv[ "{$key}_not" ] );
+					$value              = $this->prepare_comparison_value( $qv[ "{$key}_not" ], $field );
 					$value              = is_bool( $value ) ? (int) $value : $value;
 					$this->query_where .= $wpdb->prepare( " AND $field_name<>$data_type", $value ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 				}
@@ -921,20 +933,20 @@ class Query {
 					'relation' => 'AND',
 				);
 
-				if ( ! empty( $qv[ "{$key}_before" ] ) ) {
+				if ( isset( $qv[ "{$key}_before" ] ) && ( ! empty( $qv[ "{$key}_before" ] ) || is_numeric( $qv[ "{$key}_before" ] ) ) ) {
 					$date_query[] = array(
 						'before' => $this->date_to_gmt( $qv[ "{$key}_before" ], $field ),
 					);
 				}
 
-				if ( ! empty( $qv[ "{$key}_after" ] ) ) {
+				if ( isset( $qv[ "{$key}_after" ] ) && ( ! empty( $qv[ "{$key}_after" ] ) || is_numeric( $qv[ "{$key}_after" ] ) ) ) {
 					$date_query[] = array(
 						'after' => $this->date_to_gmt( $qv[ "{$key}_after" ], $field ),
 					);
 				}
 
 				if ( ! empty( $qv[ "{$key}_query" ] ) && is_array( $qv[ "{$key}_query" ] ) ) {
-					$date_query = array_merge( $date_query, $qv[ "{$key}_query" ] );
+					$date_query = array_merge( $date_query, $this->prepare_date_query( $qv[ "{$key}_query" ], $field ) );
 				}
 
 				if ( 2 < count( $date_query ) ) {
@@ -993,23 +1005,77 @@ class Query {
 	}
 
 	/**
-	 * @param \Hizzle\Store\Prop $field
+	 * Prepares scalar comparisons while retaining property sanitization callbacks.
+	 *
+	 * @param mixed $value The query value.
+	 * @param \Hizzle\Store\Prop $field The queried property.
+	 * @return mixed The prepared comparison value.
+	 */
+	private function prepare_comparison_value( $value, $field ) {
+		if ( $field->is_date_time() ) {
+			$value = $this->date_to_gmt( $value, $field );
+			if ( empty( $field->sanitize_callback ) ) {
+				return $value;
+			}
+		}
+
+		return $field->sanitize( $value );
+	}
+
+	/**
+	 * Converts boundaries in nested date clauses, preserving date component queries.
+	 *
+	 * @param array $query The WP_Date_Query clauses.
+	 * @param \Hizzle\Store\Prop $field The queried property.
+	 * @return array The prepared clauses.
+	 */
+	private function prepare_date_query( $query, $field ) {
+		foreach ( $query as $key => $value ) {
+			if ( 'before' === $key || 'after' === $key ) {
+				$query[ $key ] = $this->date_to_gmt( $value, $field );
+			} elseif ( is_numeric( $key ) && is_array( $value ) ) {
+				$query[ $key ] = $this->prepare_date_query( $value, $field );
+			}
+		}
+
+		return $query;
+	}
+
+	/**
+	 * Converts datetime query values to UTC while preserving calendar dates.
+	 *
+	 * Unqualified strings use the site timezone; numeric values are Unix timestamps.
+	 * Date component arrays retain WP_Date_Query's native semantics.
+	 *
+	 * @param mixed $date The query value.
+	 * @param \Hizzle\Store\Prop $field The queried property.
+	 * @return mixed The UTC SQL datetime, or the original non-datetime value.
 	 */
 	private function date_to_gmt( $date, $field ) {
-		if ( 'datetime' === $field->type || empty( $date ) || ! is_string( $date ) || is_numeric( $date ) ) {
+		if ( ! $field->is_date_time() || null === $date || '' === $date || is_array( $date ) ) {
 			return $date;
 		}
 
-		$wp_timezone = wp_timezone();
-
-		// Assume local timezone if not provided.
-		$dt = date_create( $date, $wp_timezone );
-
-		if ( false === $dt ) {
-			return gmdate( 'Y-m-d H:i', false );
+		if ( $date instanceof \DateTimeInterface ) {
+			return gmdate( 'Y-m-d H:i:s', $date->getTimestamp() );
 		}
 
-		return $dt->setTimezone( new \DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i' );
+		if ( is_numeric( $date ) ) {
+			return gmdate( 'Y-m-d H:i:s', (int) $date );
+		}
+
+		if ( ! is_string( $date ) ) {
+			return $date;
+		}
+
+		$dt = date_create( $date, wp_timezone() );
+
+		if ( false === $dt ) {
+			return gmdate( 'Y-m-d H:i:s', false );
+		}
+
+		// Omit the timezone so WP_Date_Query does not convert UTC back to local time.
+		return $dt->setTimezone( new \DateTimeZone( 'UTC' ) )->format( 'Y-m-d H:i:s' );
 	}
 
 	/**
@@ -1017,9 +1083,9 @@ class Query {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @global wpdb $wpdb WordPress database abstraction object.
+	 * @global \wpdb $wpdb WordPress database abstraction object.
 	 *
-	 * @param string $string The string to search for.
+	 * @param string $search_string The string to search for.
 	 * @param array  $cols The columns to search in.
 	 * @return string
 	 */
@@ -1108,8 +1174,6 @@ class Query {
 	 * Parse and sanitize 'orderby' keys passed to the query.
 	 *
 	 * @since 1.0.0
-	 *
-	 * @global wpdb $wpdb WordPress database abstraction object.
 	 *
 	 * @param string $orderby Alias for the field to order by.
 	 * @return string Value to use in the ORDER clause, if `$orderby` is valid.

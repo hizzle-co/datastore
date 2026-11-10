@@ -45,6 +45,22 @@ Provides a fluent interface for building and executing database queries against 
 - `exclude` (array) - Array of IDs to exclude
 - `extra_fields` (array) - Additional fields to include in aggregate results without aggregating
 
+### Date and time filters
+
+`DATETIME` and `TIMESTAMP` query values use the WordPress site timezone when a
+string has no timezone. Explicit offsets and timezone names are respected, and
+numeric values are UTC Unix timestamps. Values are converted to UTC for storage
+comparisons, preserving seconds. This applies to equality, inequality, lists
+(`IN` / `NOT IN`), `_before`, `_after`, and string boundaries inside `_query`.
+Use local time when constructing query values, for example
+`wp_date( 'Y-m-d H:i:sP', time() - HOUR_IN_SECONDS )`. Including the local
+offset preserves the exact instant during repeated daylight-saving hours.
+
+`DATE` properties represent calendar dates and are not timezone shifted.
+Date component clauses such as `array( 'month' => 3, 'day' => 12 )`, including
+component arrays passed as `before` or `after`, retain native `WP_Date_Query`
+semantics and compare the stored components directly. Null checks are unchanged.
+
 ## Main Methods
 
 ### Executing Queries

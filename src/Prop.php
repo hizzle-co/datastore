@@ -181,6 +181,8 @@ class Prop {
 			}
 		}
 
+		$this->type = strtoupper( (string) $this->type );
+
 		if ( empty( $this->label ) ) {
 			$this->label = ucfirst( str_replace( '_', ' ', $this->name ) );
 		}
@@ -247,13 +249,13 @@ class Prop {
 			return $this->schema;
 		}
 
-		$string = $this->name . ' ' . strtoupper( $this->type );
+		$string = $this->name . ' ' . $this->type;
 
 		if ( $this->length && ! $this->is_date() ) {
 			$string .= '(' . $this->length . ')';
 		}
 
-		if ( 'bigint' === strtolower( $this->type ) ) {
+		if ( 'BIGINT' === $this->type ) {
 			$string .= ' UNSIGNED';
 		}
 
@@ -474,7 +476,7 @@ class Prop {
 	 * @return bool
 	 */
 	public function is_boolean() {
-		return 1 === $this->length && 'tinyint' === strtolower( $this->type );
+		return 1 === $this->length && 'TINYINT' === $this->type;
 	}
 
 	/**
@@ -483,7 +485,7 @@ class Prop {
 	 * @return bool
 	 */
 	public function is_numeric() {
-		return in_array( strtolower( $this->type ), array( 'int', 'tinyint', 'smallint', 'mediumint', 'bigint' ), true );
+		return in_array( $this->type, array( 'INT', 'TINYINT', 'SMALLINT', 'MEDIUMINT', 'BIGINT' ), true );
 	}
 
 	/**
@@ -492,7 +494,7 @@ class Prop {
 	 * @return bool
 	 */
 	public function is_float() {
-		return in_array( strtolower( $this->type ), array( 'float', 'double', 'decimal' ), true );
+		return in_array( $this->type, array( 'FLOAT', 'DOUBLE', 'DECIMAL' ), true );
 	}
 
 	/**
@@ -501,7 +503,7 @@ class Prop {
 	 * @return bool
 	 */
 	public function is_date() {
-		return in_array( strtolower( $this->type ), array( 'date', 'datetime', 'timestamp' ), true );
+		return in_array( $this->type, array( 'DATE', 'DATETIME', 'TIMESTAMP' ), true );
 	}
 
 	/**
@@ -510,7 +512,7 @@ class Prop {
 	 * @return bool
 	 */
 	public function is_date_time() {
-		return in_array( strtolower( $this->type ), array( 'datetime', 'timestamp' ), true );
+		return in_array( $this->type, array( 'DATETIME', 'TIMESTAMP' ), true );
 	}
 
 	/**
@@ -616,20 +618,20 @@ class Prop {
 			return (float) $value;
 		}
 
-		if ( 'date' === $this->type ) {
+		if ( 'DATE' === $this->type ) {
 			return gmdate( 'Y-m-d', strtotime( $value ) );
 		}
 
-		if ( 'datetime' === $this->type ) {
+		if ( 'DATETIME' === $this->type ) {
 			return gmdate( 'Y-m-d H:i:s', strtotime( $value ) );
 		}
 
-		if ( 'timestamp' === $this->type ) {
+		if ( 'TIMESTAMP' === $this->type ) {
 			return is_numeric( $value ) ? absint( $value ) : strtotime( $value );
 		}
 
 		// Var chars.
-		if ( 'varchar' === strtolower( $this->type ) ) {
+		if ( 'VARCHAR' === $this->type ) {
 			return sanitize_text_field( $value );
 		}
 
