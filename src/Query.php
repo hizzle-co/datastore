@@ -1342,7 +1342,7 @@ class Query {
 	/**
 	 * Retrieves the query results.
 	 *
-	 * @return array[]|int[]|Record[]
+	 * @return array[]|int[]|Record[]|\stdClass
 	 */
 	public function get_results() {
 		return $this->results;
