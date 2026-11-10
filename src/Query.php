@@ -88,7 +88,7 @@ class Query {
 	 * Contains the 'FIELDS' sql clause
 	 *
 	 * @since 1.0.0
-	 * @var string[]
+	 * @var string|string[]
 	 */
 	public $query_fields;
 
@@ -379,7 +379,6 @@ class Query {
 
 		// Prepare aggregate fields.
 		foreach ( $aggregate_fields as $field => $aggregate ) {
-
 			if ( ! is_array( $aggregate ) ) {
 				$aggregate = wp_parse_list( $aggregate );
 			}
@@ -462,7 +461,7 @@ class Query {
 					$this->query_fields[] = "$function_upper(DISTINCT $query_field) AS $as";
 				} else {
 					$this->query_fields[] = "$function_upper($query_field) AS $as";
-				}	
+				}
 			}
 		}
 
@@ -713,7 +712,6 @@ class Query {
 		}
 
 		if ( is_array( $qv['fields'] ) ) {
-
 			$query_fields = array();
 			foreach ( $qv['fields'] as $field ) {
 				$table_field = $this->prefix_field( esc_sql( $field ) );
@@ -759,7 +757,6 @@ class Query {
 		$not_exists = array();
 
 		foreach ( $collection->get_props() as $prop ) {
-
 			if ( ! $prop->is_meta_key ) {
 				continue;
 			}
@@ -810,7 +807,6 @@ class Query {
 		}
 
 		if ( ! empty( $not_exists ) ) {
-
 			if ( 1 === count( $not_exists ) ) {
 				$select             = current( $not_exists );
 				$this->query_where .= " AND $table.id NOT IN ( SELECT DISTINCT $id_col FROM $meta_table WHERE $select )";
@@ -874,7 +870,6 @@ class Query {
 
 		// Table fields.
 		foreach ( $all_fields as $key ) {
-
 			$field_name = $this->prefix_field( $key );
 			$field      = $collection->get_prop( $key );
 			$data_type  = $field->get_data_type();
@@ -887,14 +882,13 @@ class Query {
 
 			// = or IN.
 			if ( array_key_exists( $key, $qv ) && 'any' !== $qv[ $key ] ) {
-
 				if ( 'id' === $key || $primary === $key || ( isset( $collection->keys['unique'] ) && in_array( $key, (array) $collection->keys['unique'], true ) ) ) {
 					if ( is_string( $qv[ $key ] ) ) {
 						$qv[ $key ] = noptin_parse_list( $qv[ $key ], true );
 					}
 				}
 
-				if ( is_null( $qv[ $key ] ) ) {
+				if ( is_null( $qv[ $key ] ) || 'null' === $qv[ $key ] ) {
 					$this->query_where .= " AND $field_name IS NULL";
 				} elseif ( is_array( $qv[ $key ] ) ) {
 					$enums              = "'" . implode( "','", array_map( 'esc_sql', $qv[ $key ] ) ) . "'";
@@ -908,8 +902,7 @@ class Query {
 
 			// != or NOT IN.
 			if ( array_key_exists( "{$key}_not", $qv ) ) {
-
-				if ( is_null( $qv[ "{$key}_not" ] ) ) {
+				if ( is_null( $qv[ "{$key}_not" ] ) || 'null' === $qv[ "{$key}_not" ] ) {
 					$this->query_where .= " AND $field_name IS NOT NULL";
 				} elseif ( is_array( $qv[ "{$key}_not" ] ) ) {
 					$enums              = "'" . implode( "','", array_map( 'esc_sql', $qv[ "{$key}_not" ] ) ) . "'";
@@ -923,7 +916,6 @@ class Query {
 
 			// Date queries.
 			if ( $field->is_date() ) {
-
 				$date_query = array(
 					'column'   => $field_name,
 					'relation' => 'AND',
@@ -946,7 +938,6 @@ class Query {
 				}
 
 				if ( 2 < count( $date_query ) ) {
-
 					$date_query         = new \WP_Date_Query( $date_query, $field_name );
 					$this->query_where .= $date_query->get_sql();
 				}
@@ -954,7 +945,6 @@ class Query {
 
 			// Numbers & Floats.
 			if ( $field->is_numeric() || $field->is_float() ) {
-
 				if ( ! empty( $qv[ "{$key}_min" ] ) ) {
 					$this->query_where .= $wpdb->prepare( " AND $field_name >= $data_type", $qv[ "{$key}_min" ] ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 				}
@@ -1237,6 +1227,7 @@ class Query {
 	/**
 	 * Prefixes a field name with the table name.
 	 *
+	 * @param string $field
 	 * @since 1.0.0
 	 * @return string|false
 	 */
@@ -1338,7 +1329,6 @@ class Query {
 			$this->results = array();
 
 			foreach ( $results as $result ) {
-
 				if ( isset( $result->id ) ) {
 					// Cache object.
 					$collection->update_cache( (array) $result );
