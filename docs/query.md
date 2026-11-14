@@ -53,8 +53,9 @@ numeric values are UTC Unix timestamps. Values are converted to UTC for storage
 comparisons, preserving seconds. This applies to equality, inequality, lists
 (`IN` / `NOT IN`), `_before`, `_after`, and string boundaries inside `_query`.
 Use local time when constructing query values, for example
-`wp_date( 'Y-m-d H:i:sP', time() - HOUR_IN_SECONDS )`. Including the local
-offset preserves the exact instant during repeated daylight-saving hours.
+`current_datetime()->setTimestamp( time() - HOUR_IN_SECONDS )->format( DATE_ATOM )`.
+This avoids localization and display filters. Including the local offset preserves
+the exact instant during repeated daylight-saving hours.
 
 `DATE` properties represent calendar dates and are not timezone shifted.
 Date component clauses such as `array( 'month' => 3, 'day' => 12 )`, including
