@@ -378,11 +378,16 @@ class Prop {
 		$rest_schema  = $this->get_rest_schema();
 		$query_schema = array();
 
+		$field_name = empty( $this->label ) ? $this->name : $this->label;
+		$collection = $this->get_collection();
+		$resources  = empty( $collection ) ? 'resources' : ( $collection->get_name() ? $collection->get_name() : 'resources' );
+
 		// Has the value.
 		$query_schema[ $this->name ] = array(
 			'description'       => sprintf(
-				'Limit response to resources where %s has the provided value.',
-				$this->name
+				'Limit response to %s where %s has the provided value.',
+				$resources,
+				$field_name
 			),
 			'type'              => array_unique( array_merge( (array) $rest_schema['type'], array( 'array' ) ) ),
 			'validate_callback' => 'rest_validate_request_arg',
@@ -395,8 +400,9 @@ class Prop {
 		// Does not have the value.
 		$query_schema[ "{$this->name}_not" ] = array(
 			'description'       => sprintf(
-				'Limit response to resources where %s does not have the provided value.',
-				$this->name
+				'Limit response to %s where %s does not have the provided value.',
+				$resources,
+				$field_name
 			),
 			'type'              => array_unique( array_merge( (array) $rest_schema['type'], array( 'array' ) ) ),
 			'validate_callback' => 'rest_validate_request_arg',
@@ -408,8 +414,12 @@ class Prop {
 
 		if ( $this->nullable && ! $this->is_meta_key ) {
 			$query_schema[ "{$this->name}_is_null" ] = array(
-				'description' => sprintf( 'Filter resources by whether %s is NULL.', $this->name ),
-				'type'        => 'boolean',
+				'description' => sprintf(
+					'Filter %s by whether %s is NULL.',
+					$resources,
+					$field_name
+				),
+				'type' => 'boolean',
 			);
 		}
 
@@ -417,8 +427,9 @@ class Prop {
 		if ( $this->is_date() && ! $this->is_meta_key ) {
 			$query_schema[ "{$this->name}_before" ] = array(
 				'description'       => sprintf(
-					'Limit response to resources where %s is before a given strtotime compatible date.',
-					$this->name
+					'Limit response to %s where %s is before a given strtotime compatible date.',
+					$resources,
+					$field_name
 				),
 				'type'              => 'string',
 				'validate_callback' => 'rest_validate_request_arg',
@@ -426,8 +437,9 @@ class Prop {
 
 			$query_schema[ "{$this->name}_after" ] = array(
 				'description'       => sprintf(
-					'Limit response to resources where %s is after a given strtotime compatible date.',
-					$this->name
+					'Limit response to %s where %s is after a given strtotime compatible date.',
+					$resources,
+					$field_name
 				),
 				'type'              => 'string',
 				'validate_callback' => 'rest_validate_request_arg',
@@ -444,8 +456,9 @@ class Prop {
 		if ( $this->is_float() && ! $this->is_meta_key ) {
 			$query_schema[ "{$this->name}_min" ] = array(
 				'description'       => sprintf(
-					'Limit response to resources where %s is greater than or equal to a given number.',
-					$this->name
+					'Limit response to %s where %s is greater than or equal to a given number.',
+					$resources,
+					$field_name
 				),
 				'type'              => $rest_schema['type'],
 				'validate_callback' => 'rest_validate_request_arg',
@@ -453,8 +466,9 @@ class Prop {
 
 			$query_schema[ "{$this->name}_max" ] = array(
 				'description'       => sprintf(
-					'Limit response to resources where %s is less than or equal to a given number.',
-					$this->name
+					'Limit response to %s where %s is less than or equal to a given number.',
+					$resources,
+					$field_name
 				),
 				'type'              => $rest_schema['type'],
 				'validate_callback' => 'rest_validate_request_arg',
@@ -469,6 +483,7 @@ class Prop {
 		$this->query_schema = apply_filters( $this->hook_prefix( 'query_schema' ), $query_schema, $this );
 		return $this->query_schema;
 	}
+
 
 	/**
 	 * Checks if the property value is a boolean.
