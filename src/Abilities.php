@@ -122,13 +122,6 @@ class Abilities {
 				}
 			}
 		}
-		foreach ( $query as &$param ) {
-			unset( $param['validate_callback'], $param['sanitize_callback'] );
-			if ( isset( $param['type'] ) && is_array( $param['type'] ) ) {
-				$param['type'] = array_values( $param['type'] );
-			}
-		}
-		unset( $param );
 		$query += array(
 			'page' => array(
 				'type'    => 'integer',
@@ -152,7 +145,7 @@ class Abilities {
 				array(
 					$name         => array(
 						'type'  => 'array',
-						'items' => array( 'type' => 'object' ),
+						'items' => $this->record_schema( $collection ),
 					),
 					'total'       => array(
 						'type'        => 'integer',
@@ -231,14 +224,19 @@ class Abilities {
 			}
 		}
 		if ( in_array( 'aggregate', $enabled, true ) ) {
-			$columns       = array_intersect( $collection->get_known_fields()['main'], array_keys( $props ) );
-			$metrics       = array_fill_keys(
-				$columns,
-				array(
+			$columns = array_intersect( $collection->get_known_fields()['main'], array_keys( $props ) );
+			$metrics = array();
+			foreach ( $columns as $column ) {
+				$prop      = $collection->get_prop( $column );
+				$functions = array( 'COUNT', 'MIN', 'MAX' );
+				if ( $prop && ( $prop->is_numeric() || $prop->is_float() ) ) {
+					$functions = array_merge( $functions, array( 'SUM', 'AVG' ) );
+				}
+				$metrics[ $column ] = array(
 					'type' => 'string',
-					'enum' => array( 'COUNT', 'SUM', 'AVG', 'MIN', 'MAX' ),
-				)
-			);
+					'enum' => $functions,
+				);
+			}
 			$metrics['id'] = array(
 				'type' => 'string',
 				'enum' => array( 'COUNT', 'MIN', 'MAX' ),
@@ -299,16 +297,40 @@ class Abilities {
 			$output_schema['properties'] = $output;
 			$output_schema['required']   = array_keys( $output );
 		}
+		if ( 'get' === $operation ) {
+			$output_schema = $this->record_schema( $collection );
+		} elseif ( 'tab' === $operation ) {
+			$output_schema['properties'] = array(
+				'results' => array(
+					'type'        => array( 'array', 'object', 'string', 'number', 'integer', 'boolean', 'null' ),
+					'description' => 'Content returned by the selected tab. Its structure depends on the registered tab callback.',
+				),
+			);
+			$output_schema['required']   = array( 'results' );
+		} elseif ( 'aggregate' === $operation ) {
+			$output_schema['properties'] = array(
+				'results' => array(
+					'type'        => 'array',
+					'description' => 'Summary rows. Columns use lowercase function_field aliases such as count_id. Grouped rows also include the groupby field.',
+					'items'       => array( 'type' => 'object' ),
+				),
+			);
+			$output_schema['required']   = array( 'results' );
+		}
 		wp_register_ability(
 			$store . '/' . self::slug( $slug ),
 			array(
 				'label'               => $label,
 				'description'         => $description,
 				'category'            => $store,
-				'input_schema'        => $input,
-				'output_schema'       => $output_schema,
-				'permission_callback' => function () use ( $route ) {
-					return true === $this->controller->get_items_permissions_check( new \WP_REST_Request( 'GET', $route ) );
+				'input_schema'        => self::normalize_schema( $input ),
+				'output_schema'       => self::normalize_schema( $output_schema ),
+				'permission_callback' => function ( $args = array() ) use ( $operation, $route ) {
+					$request = $this->request( $operation, $route, $args );
+					if ( 'get' === $operation || 'tab' === $operation ) {
+						return true === $this->controller->get_item_permissions_check( $request );
+					}
+					return true === $this->controller->get_items_permissions_check( $request );
 				},
 				'execute_callback'    => function ( $args = array() ) use ( $operation, $route, $collection ) {
 					return $this->execute( $operation, $route, $collection, $args );
@@ -362,21 +384,10 @@ class Abilities {
 			}
 			return array( 'options' => $options );
 		}
-		if ( 'get' === $operation ) {
-			$key    = key( $args );
-			$route .= 'id' === $key ? '/' . (int) $args['id'] : '/' . $key . '/' . rawurlencode( $args[ $key ] );
-			$args   = array();
-		} elseif ( 'tab' === $operation ) {
-			$route .= '/' . (int) $args['id'] . '/' . rawurlencode( $args['tab_id'] );
-			$args   = array();
-		} elseif ( 'aggregate' === $operation ) {
-			$route .= '/aggregate';
-		}
+		$request = $this->request( $operation, $route, $args );
 		if ( 'get' === $operation || 'list' === $operation ) {
-			$args['_fields'] = implode( ',', wp_list_pluck( $collection->get_props(), 'name' ) );
+			$request->set_param( '_fields', implode( ',', wp_list_pluck( $collection->get_props(), 'name' ) ) );
 		}
-		$request = new \WP_REST_Request( 'GET', $route );
-		$request->set_query_params( $args );
 		$response = rest_do_request( $request );
 		if ( $response->is_error() ) {
 			return $response->as_error();
@@ -390,5 +401,119 @@ class Abilities {
 			);
 		}
 		return 'get' === $operation ? $response->get_data() : array( 'results' => $response->get_data() );
+	}
+
+	/**
+	 * Build the REST request used for permissions and execution.
+	 *
+	 * @param string $operation Read operation name.
+	 * @param string $route     Collection REST path.
+	 * @param array  $args      Validated ability input.
+	 * @return \WP_REST_Request
+	 */
+	private function request( $operation, $route, $args ) {
+		$url_params = array();
+		if ( 'get' === $operation && $args ) {
+			$key = key( $args );
+			if ( 'id' === $key ) {
+				$route     .= '/' . (int) $args['id'];
+				$url_params = array( 'id' => (int) $args['id'] );
+			} else {
+				$route     .= '/' . $key . '/' . rawurlencode( $args[ $key ] );
+				$url_params = array(
+					'hizzle_get_by' => $key,
+					'hizzle_value'  => rawurlencode( $args[ $key ] ),
+				);
+			}
+			$args = array();
+		} elseif ( 'tab' === $operation && isset( $args['id'], $args['tab_id'] ) ) {
+			$route     .= '/' . (int) $args['id'] . '/' . rawurlencode( $args['tab_id'] );
+			$url_params = array(
+				'id'     => (int) $args['id'],
+				'tab_id' => $args['tab_id'],
+			);
+			$args       = array();
+		} elseif ( 'aggregate' === $operation ) {
+			$route .= '/aggregate';
+		}
+		$request = new \WP_REST_Request( 'GET', $route );
+		$request->set_url_params( $url_params );
+		$request->set_query_params( $args );
+		return $request;
+	}
+
+	/**
+	 * Describe record fields without requiring fields omitted by REST context filters.
+	 *
+	 * @param Collection $collection Collection supplying the response properties.
+	 * @return array Record output schema.
+	 */
+	private function record_schema( $collection ) {
+		$properties = array();
+		$schema     = $this->controller->get_item_schema();
+		foreach ( $collection->get_props() as $prop ) {
+			if ( isset( $schema['properties'][ $prop->name ] ) ) {
+				$field    = $schema['properties'][ $prop->name ];
+				$property = array_intersect_key( $field, array_flip( array( 'type', 'description', 'items', 'properties' ) ) );
+				// Text storage can contain structured values returned by record getters.
+				if ( in_array( $prop->type, array( 'TEXT', 'LONGTEXT', 'MEDIUMTEXT', 'TINYTEXT' ), true ) && ! isset( $field['items'] ) && ! isset( $field['properties'] ) ) {
+					$property['type'] = array_values( array_unique( array_merge( (array) $property['type'], array( 'array', 'object' ) ) ) );
+				}
+				if ( ! empty( $collection->object ) && method_exists( $collection->object, 'get_formatted_' . $prop->name ) ) {
+					$property = array(
+						'type'        => 'object',
+						'description' => $field['description'] ?? '',
+						'properties'  => array(
+							'raw'      => $property,
+							'rendered' => array(
+								'type'        => array( 'array', 'object', 'string', 'number', 'integer', 'boolean', 'null' ),
+								'description' => 'Formatted display value.',
+							),
+						),
+					);
+				}
+				$properties[ $prop->name ] = $property;
+			}
+		}
+		return array(
+			'type'       => 'object',
+			'properties' => $properties,
+		);
+	}
+
+	/**
+	 * Remove REST-only schema attributes while preserving property and definition names.
+	 *
+	 * @param array $schema JSON schema node.
+	 * @return array Schema safe for ability discovery and validation.
+	 */
+	private static function normalize_schema( $schema ) {
+		unset( $schema['validate_callback'], $schema['sanitize_callback'], $schema['arg_options'], $schema['context'], $schema['readonly'] );
+		if ( isset( $schema['required'] ) && is_bool( $schema['required'] ) ) {
+			unset( $schema['required'] );
+		}
+		if ( isset( $schema['type'] ) && is_array( $schema['type'] ) ) {
+			$schema['type'] = array_values( array_unique( $schema['type'] ) );
+		}
+		foreach ( array( 'properties', 'patternProperties', 'definitions', '$defs' ) as $key ) {
+			foreach ( $schema[ $key ] ?? array() as $name => $child ) {
+				$schema[ $key ][ $name ] = self::normalize_schema( $child );
+			}
+		}
+		foreach ( array( 'items', 'additionalProperties', 'additionalItems', 'not' ) as $key ) {
+			if ( isset( $schema[ $key ] ) && is_array( $schema[ $key ] ) ) {
+				if ( 'items' === $key && isset( $schema[ $key ][0] ) ) {
+					$schema[ $key ] = array_map( array( __CLASS__, 'normalize_schema' ), $schema[ $key ] );
+				} else {
+					$schema[ $key ] = self::normalize_schema( $schema[ $key ] );
+				}
+			}
+		}
+		foreach ( array( 'oneOf', 'anyOf', 'allOf' ) as $key ) {
+			foreach ( $schema[ $key ] ?? array() as $index => $child ) {
+				$schema[ $key ][ $index ] = self::normalize_schema( $child );
+			}
+		}
+		return $schema;
 	}
 }
