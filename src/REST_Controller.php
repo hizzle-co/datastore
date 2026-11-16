@@ -1148,7 +1148,7 @@ class REST_Controller extends \WP_REST_Controller {
 					if ( is_array( $value ) && ! is_array( current( $value ) ) ) {
 						$value = implode( ',', $value );
 					}
-				} elseif ( is_callable( array( $item, "get_formatted_{$key}" ) ) ) {
+				} elseif ( 'edit' !== $context && is_callable( array( $item, "get_formatted_{$key}" ) ) ) {
 					$value = array(
 						'raw'      => $value,
 						'rendered' => $item->{"get_formatted_{$key}"}(),

@@ -50,6 +50,9 @@ class Ability_Test_Controller extends \Hizzle\Store\REST_Controller {
 	 * @return bool
 	 */
 	public function get_items_permissions_check( $request ) {
+		if ( '/people' === substr( $request->get_route(), -7 ) && isset( $request['search'] ) ) {
+			ability_test_assert( 'edit' === $request['context'], 'List ability did not request edit context.' );
+		}
 		return $this->allow_list && 'allowed' === $request['search'];
 	}
 
@@ -78,6 +81,7 @@ class Ability_Test_Controller extends \Hizzle\Store\REST_Controller {
 	 * @return \WP_REST_Response
 	 */
 	public function get_item( $request ) {
+		ability_test_assert( 'edit' === $request['context'], 'Record ability did not request edit context.' );
 		return rest_ensure_response(
 			array(
 				'id'     => 7,
@@ -85,6 +89,43 @@ class Ability_Test_Controller extends \Hizzle\Store\REST_Controller {
 				'amount' => 12.5,
 			)
 		);
+	}
+}
+
+/** Record fixture for raw, formatted, and export response checks. */
+class Ability_Test_Record extends \Hizzle\Store\Record {
+	/** @var \Hizzle\Store\Collection Fixture collection. */
+	private $fixture_collection;
+
+	/**
+	 * Bind a record without reading the database.
+	 *
+	 * @param \Hizzle\Store\Collection $collection Fixture collection.
+	 */
+	public function __construct( $collection ) {
+		$this->fixture_collection = $collection;
+	}
+
+	/** Return the fixture collection. @return \Hizzle\Store\Collection */
+	public function get_collection() {
+		return $this->fixture_collection;
+	}
+
+	/**
+	 * Read fixture values without normalizing their types.
+	 *
+	 * @param string $prop    Field name.
+	 * @param string $context REST context.
+	 * @return mixed Fixture value.
+	 */
+	public function get( $prop, $context = 'view' ) {
+		$values = array( 'email' => 'allowed+person@example.test', 'active' => false, 'tags' => array( 'First', 'Second' ) );
+		return $values[ $prop ] ?? null;
+	}
+
+	/** Return the formatted email. @return string */
+	public function get_formatted_email() {
+		return 'Allowed person';
 	}
 }
 
@@ -113,6 +154,8 @@ $store      = \Hizzle\Store\Store::init(
 					'enum'   => array( 'allowed+person@example.test' => 'Allowed person' ),
 				),
 				'amount' => array( 'type' => 'DECIMAL' ),
+				'active' => array( 'type' => 'TINYINT', 'length' => 1 ),
+				'tags'   => array( 'type' => 'TEXT', 'is_meta_key' => true, 'is_meta_key_multiple' => true ),
 			),
 			'keys'          => array( 'unique' => array( 'email' ) ),
 		),
@@ -120,6 +163,24 @@ $store      = \Hizzle\Store\Store::init(
 );
 $collection = $store->get( 'people' );
 $controller = new Ability_Test_Controller( $collection );
+
+$fixture = new Ability_Test_Record( $collection );
+foreach ( array( 'view', 'edit' ) as $context ) {
+	$request = new \WP_REST_Request( 'GET', $controller->get_collection_route() . '/7' );
+	$request->set_query_params( array( 'context' => $context, '_fields' => 'email,active,tags' ) );
+	$data = $controller->prepare_item_for_response( $fixture, $request )->get_data();
+	ability_test_assert( false === $data['active'], 'Boolean changed during ordinary REST read.' );
+	ability_test_assert( array( 'First', 'Second' ) === $data['tags'], 'Tags changed during ordinary REST read.' );
+	if ( 'edit' === $context ) {
+		ability_test_assert( 'allowed+person@example.test' === $data['email'], 'Edit response was formatted.' );
+	} else {
+		ability_test_assert( 'Allowed person' === $data['email']['rendered'], 'View formatting lost.' );
+	}
+}
+$request->set_param( '__fields', 'email,active,tags' );
+$export = $controller->prepare_item_for_response( $fixture, $request )->get_data();
+ability_test_assert( 0 === $export['active'] && 'First,Second' === $export['tags'], 'Export normalization changed.' );
+
 
 // Preserve a property literally named "sanitize_callback" inside nested schemas.
 add_filter(
