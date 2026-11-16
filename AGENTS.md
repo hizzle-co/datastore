@@ -1,0 +1,2 @@
+- Keep these instructions current
+- Datastore record/list abilities request `context=edit` for raw field values. Keep formatted `{raw, rendered}` wrappers in view context and preserve the separate `__fields` export normalization. Edit-context task metadata must remain structured.
