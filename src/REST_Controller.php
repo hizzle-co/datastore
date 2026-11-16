@@ -45,6 +45,15 @@ class REST_Controller extends \WP_REST_Controller {
 	}
 
 	/**
+	 * Retrieve the collection route using this controller's REST namespace and base.
+	 *
+	 * @return string Collection REST path, including its leading slash.
+	 */
+	public function get_collection_route() {
+		return '/' . trim( $this->namespace, '/' ) . '/' . trim( $this->rest_base, '/' );
+	}
+
+	/**
 	 * Retrieves the current store.
 	 *
 	 * @return Store|null The store, or null if not registered.

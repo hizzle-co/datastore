@@ -280,7 +280,7 @@ class Abilities {
 	private function add( $operation, $slug, $label, $description, $properties, $required = array(), $output = array() ) {
 		$collection = $this->controller->fetch_collection();
 		$store      = self::slug( $collection->get_namespace() );
-		$route      = '/' . $collection->get_namespace() . '/v1/' . $collection->get_name();
+		$route      = $this->controller->get_collection_route();
 		$input      = array(
 			'type'                 => 'object',
 			'properties'           => $properties,
