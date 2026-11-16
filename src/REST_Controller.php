@@ -38,6 +38,8 @@ class REST_Controller extends \WP_REST_Controller {
 		// Register rest routes.
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
 
+		Abilities::init( $store_namespace, $collection, $this );
+
 		// Background export cron handlers.
 		Export::init();
 	}
@@ -50,7 +52,7 @@ class REST_Controller extends \WP_REST_Controller {
 	 */
 	public function fetch_store() {
 		try {
-			return Store::instance( trim( $this->namespace, '/v1' ) );
+			return Store::instance( substr( $this->namespace, 0, -3 ) );
 		} catch ( Store_Exception $e ) {
 			return null;
 		}
@@ -630,7 +632,7 @@ class REST_Controller extends \WP_REST_Controller {
 		$collection = $this->fetch_collection();
 
 		if ( rest_sanitize_boolean( $request['background_export'] ?? false ) ) {
-			$store_namespace = trim( $this->namespace, '/v1' );
+			$store_namespace = substr( $this->namespace, 0, -3 );
 
 			$email = $request['email'];
 			if ( empty( $email ) || ! is_email( $email ) ) {
@@ -1612,7 +1614,7 @@ class REST_Controller extends \WP_REST_Controller {
 				);
 
 				if ( $prop->is_tokens ) {
-					$schema[ $prop->name ]['suggestions'] = $collection->get_all_meta( $prop->name );
+					$schema[ $prop->name ]['suggestions'] = Abilities::token_suggestions( $collection, $prop );
 				}
 			}
 
@@ -1705,7 +1707,7 @@ class REST_Controller extends \WP_REST_Controller {
 	 * @return string
 	 */
 	protected function get_normalized_rest_base() {
-		return preg_replace( '/\(.*\)\//i', '', trim( $this->namespace, '/v1' ) . '_' . $this->rest_base );
+		return preg_replace( '/\(.*\)\//i', '', substr( $this->namespace, 0, -3 ) . '_' . $this->rest_base );
 	}
 
 	/**
