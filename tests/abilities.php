@@ -69,6 +69,51 @@ class Ability_Test_Controller extends \Hizzle\Store\REST_Controller {
 		);
 	}
 
+	/** @var int Number of fixture save calls. */
+	public $save_calls = 0;
+
+	/**
+	 * Permit fixture writes so route validation can be exercised.
+	 *
+	 * @param \WP_REST_Request $request Write request.
+	 * @return bool
+	 */
+	public function create_item_permissions_check( $request ) {
+		return true;
+	}
+
+	/**
+	 * Permit fixture updates without database access.
+	 *
+	 * @param \WP_REST_Request $request Update request.
+	 * @return bool
+	 */
+	public function update_item_permissions_check( $request ) {
+		return true;
+	}
+
+	/**
+	 * Return the existing fixture for update requests.
+	 *
+	 * @param \WP_REST_Request $request Record request.
+	 * @return Ability_Test_Record
+	 */
+	protected function get_object( $request ) {
+		return new Ability_Test_Record( $this->collection );
+	}
+
+	/**
+	 * Simulate a successful save without creating database rows.
+	 *
+	 * @param \WP_REST_Request $request  Write request.
+	 * @param bool             $creating Whether this is a creation request.
+	 * @return Ability_Test_Record
+	 */
+	protected function save_object( $request, $creating = false ) {
+		++$this->save_calls;
+		return new Ability_Test_Record( $this->collection );
+	}
+
 	/** Return one registered tab. @return array */
 	public function get_record_tabs() {
 		return array( 'activity' => array( 'callback' => '__return_empty_array' ) );
@@ -104,6 +149,7 @@ class Ability_Test_Record extends \Hizzle\Store\Record {
 	 */
 	public function __construct( $collection ) {
 		$this->fixture_collection = $collection;
+		$this->id = 7;
 	}
 
 	/** Return the fixture collection. @return \Hizzle\Store\Collection */
@@ -262,4 +308,27 @@ ability_test_assert( is_wp_error( $aggregate->validate_input( array( 'aggregate'
 ability_test_assert( ! is_wp_error( $aggregate->validate_input( array( 'aggregate' => array( 'amount' => 'AVG' ) ) ) ), 'Decimal average rejected.' );
 ability_test_assert( $aggregate->check_permissions( array( 'search' => 'allowed' ) ), 'Aggregate filter missing from permission request.' );
 ability_test_assert( isset( $aggregate->get_output_schema()['properties']['results'] ), 'Aggregate result wrapper missing.' );
+// Both create and update must honor context and reject invalid context before saving.
+foreach ( array( 'POST', 'PUT' ) as $method ) {
+	foreach ( array( null, 'edit', 'view' ) as $context ) {
+		$route = $controller->get_collection_route() . ( 'PUT' === $method ? '/7' : '' );
+		$request = new \WP_REST_Request( $method, $route );
+		$params = array( 'email' => 'allowed+person@example.test', '_fields' => 'email' );
+		if ( null !== $context ) {
+			$params['context'] = $context;
+		}
+		$request->set_body_params( $params );
+		$response = rest_do_request( $request );
+		ability_test_assert( ! $response->is_error(), 'Fixture save failed.' );
+		$email = $response->get_data()['email'];
+		ability_test_assert(
+			'view' === $context ? is_array( $email ) && 'Allowed person' === $email['rendered'] : 'allowed+person@example.test' === $email,
+			'Save response used the wrong context.'
+		);
+	}
+	$count = $controller->save_calls;
+	$request->set_param( 'context', 'invalid-context' );
+	ability_test_assert( rest_do_request( $request )->is_error(), 'Invalid save context accepted.' );
+	ability_test_assert( $count === $controller->save_calls, 'Invalid context reached persistence.' );
+}
 echo "Ability permission and schema regressions passed.\n";
