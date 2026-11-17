@@ -1609,6 +1609,7 @@ class REST_Controller extends \WP_REST_Controller {
 
 				$schema[ $prop->name ] = array(
 					'name'         => $prop->name,
+					'context'      => $prop->get_rest_schema()['context'] ?? array(),
 					'label'        => $prop->label,
 					'description'  => $prop->description,
 					'length'       => $prop->length,
