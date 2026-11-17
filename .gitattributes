@@ -8,3 +8,4 @@ example-plugin.php export-ignore
 index.php export-ignore
 JOINS.md export-ignore
 renovate.json export-ignore
+AGENTS.md export-ignore
