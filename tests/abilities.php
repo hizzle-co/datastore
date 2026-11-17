@@ -14,7 +14,9 @@ define( 'WP_HTTP_BLOCK_EXTERNAL', true );
 $GLOBALS['wp_filter']['muplugins_loaded'][-999][] = array(
 	'accepted_args' => 0,
 	'function'      => static function () {
+		require_once dirname( __DIR__ ) . '/src/Prop.php';
 		require_once dirname( __DIR__ ) . '/src/REST_Controller.php';
+		require_once dirname( __DIR__ ) . '/src/Export.php';
 		require_once dirname( __DIR__ ) . '/src/Abilities.php';
 	},
 );
@@ -165,6 +167,7 @@ class Ability_Test_Record extends \Hizzle\Store\Record {
 	 * @return mixed Fixture value.
 	 */
 	public function get( $prop, $context = 'view' ) {
+		ability_test_assert( 'export' !== $context, 'Export context leaked into record getters.' );
 		$values = array( 'email' => 'allowed+person@example.test', 'active' => false, 'tags' => array( 'First', 'Second' ) );
 		return $values[ $prop ] ?? null;
 	}
@@ -200,6 +203,9 @@ $store      = \Hizzle\Store\Store::init(
 					'enum'   => array( 'allowed+person@example.test' => 'Allowed person' ),
 				),
 				'amount' => array( 'type' => 'DECIMAL' ),
+				'edit_only' => array( 'type' => 'VARCHAR', 'extra_rest_schema' => array( 'context' => array( 'edit' ) ) ),
+				'view_only' => array( 'type' => 'VARCHAR', 'extra_rest_schema' => array( 'context' => array( 'view' ) ) ),
+				'export_only' => array( 'type' => 'VARCHAR', 'extra_rest_schema' => array( 'context' => array( 'export' ) ) ),
 				'active' => array( 'type' => 'TINYINT', 'length' => 1 ),
 				'tags'   => array( 'type' => 'TEXT', 'is_meta_key' => true, 'is_meta_key_multiple' => true ),
 			),
@@ -223,9 +229,17 @@ foreach ( array( 'view', 'edit' ) as $context ) {
 		ability_test_assert( 'Allowed person' === $data['email']['rendered'], 'View formatting lost.' );
 	}
 }
-$request->set_param( '__fields', 'email,active,tags' );
+$request->set_param( 'context', 'export' );
+ability_test_assert( in_array( 'export', $controller->get_context_param()['enum'], true ), 'Export context is not advertised.' );
 $export = $controller->prepare_item_for_response( $fixture, $request )->get_data();
+ability_test_assert( 'allowed+person@example.test' === $export['email'], 'Export returned formatted wrappers.' );
 ability_test_assert( 0 === $export['active'] && 'First,Second' === $export['tags'], 'Export normalization changed.' );
+$request->set_query_params( array( 'context' => 'export' ) );
+$export_all = $controller->prepare_item_for_response( $fixture, $request )->get_data();
+ability_test_assert( ! array_key_exists( 'edit_only', $export_all ), 'Export ignored an edit-only restriction.' );
+ability_test_assert( array_key_exists( 'export_only', $export_all ), 'Export omitted an export-only field.' );
+ability_test_assert( in_array( 'export', $collection->get_props()['email']->get_rest_schema()['context'], true ), 'Property schema omitted default export context.' );
+ability_test_assert( ! array_key_exists( 'view_only', $export_all ) && ! array_key_exists( 'hizzlewp_actions', $export_all ), 'Export included view-only fields.' );
 
 
 // Preserve a property literally named "sanitize_callback" inside nested schemas.
@@ -310,7 +324,7 @@ ability_test_assert( $aggregate->check_permissions( array( 'search' => 'allowed'
 ability_test_assert( isset( $aggregate->get_output_schema()['properties']['results'] ), 'Aggregate result wrapper missing.' );
 // Both create and update must honor context and reject invalid context before saving.
 foreach ( array( 'POST', 'PUT' ) as $method ) {
-	foreach ( array( null, 'edit', 'view' ) as $context ) {
+	foreach ( array( null, 'edit', 'view', 'export' ) as $context ) {
 		$route = $controller->get_collection_route() . ( 'PUT' === $method ? '/7' : '' );
 		$request = new \WP_REST_Request( $method, $route );
 		$params = array( 'email' => 'allowed+person@example.test', '_fields' => 'email' );

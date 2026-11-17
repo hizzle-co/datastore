@@ -1,3 +1,3 @@
 - Keep these instructions current
-- Datastore record/list abilities request `context=edit` for raw field values. Keep formatted `{raw, rendered}` wrappers in view context and preserve the separate `__fields` export normalization. Edit-context task metadata must remain structured.
+- Datastore record/list abilities request `context=edit` for raw field values. Keep formatted `{raw, rendered}` wrappers in view context and use `context=export` with `_fields` for export normalization, including background exports. Prop schemas default to view, edit, and export contexts; explicit context overrides remain authoritative for REST and background exports. Export uses edit getters. Edit-context task metadata must remain structured.
 - Add explanatory comments when changing behavior whose purpose may be unclear. Explain the reason, relevant invariant, or edge case rather than restating the code.
