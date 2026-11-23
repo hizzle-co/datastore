@@ -280,7 +280,14 @@ foreach ( array(
 		'email' => 'allowed+person@example.test',
 	),
 ) as $invalid ) {
-	ability_test_assert( is_wp_error( $get->validate_input( $invalid ) ), 'Invalid selector accepted.' );
+	if ( ! $invalid ) {
+		ability_test_assert( is_wp_error( $get->validate_input( $invalid ) ), 'Empty selector accepted.' );
+	} else {
+		ability_test_assert( ! isset( $get->get_input_schema()['maxProperties'] ), 'Connector-incompatible property count limit remains advertised.' );
+		ability_test_assert( ! is_wp_error( $get->validate_input( $invalid ) ), 'Multiple selectors should reach callback validation.' );
+		ability_test_assert( is_wp_error( $get->check_permissions( $invalid ) ), 'Permission callback accepted multiple selectors.' );
+		ability_test_assert( is_wp_error( $get->execute( $invalid ) ), 'Execution accepted multiple selectors.' );
+	}
 }
 foreach ( array( array( 'id' => 7 ), array( 'email' => 'allowed+person@example.test' ) ) as $input ) {
 	ability_test_assert( ! is_wp_error( $get->execute( $input ) ), 'Allowed record execution failed.' );

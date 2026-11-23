@@ -288,7 +288,7 @@ class Abilities {
 			$input['required'] = $required;
 		} elseif ( 'get' === $operation ) {
 			$input['minProperties'] = 1;
-			$input['maxProperties'] = 1;
+			// Enforce exactly one selector in callbacks; some MCP clients miscount maxProperties.
 		} else {
 			$input['default'] = array();
 		}
@@ -336,6 +336,10 @@ class Abilities {
 					 */
 					do_action( 'hizzle_store_ability_permission_check', $operation, $route, $collection, $args );
 
+					if ( 'get' === $operation && ( ! is_array( $args ) || 1 !== count( $args ) ) ) {
+						return new \WP_Error( 'hizzle_store_invalid_identifier', 'Supply exactly one identifier.' );
+					}
+
 					$request = $this->request( $operation, $route, $args );
 					if ( 'get' === $operation || 'tab' === $operation ) {
 						return true === $this->controller->get_item_permissions_check( $request );
@@ -376,6 +380,10 @@ class Abilities {
 		 * @param array      $args       Validated caller input, before REST parameters are added.
 		 */
 		do_action( 'hizzle_store_ability_execute', $operation, $route, $collection, $args );
+
+		if ( 'get' === $operation && ( ! is_array( $args ) || 1 !== count( $args ) ) ) {
+			return new \WP_Error( 'hizzle_store_invalid_identifier', 'Supply exactly one identifier.' );
+		}
 
 		if ( 'field-options' === $operation ) {
 			$prop    = $collection->get_prop( $args['field'] );
