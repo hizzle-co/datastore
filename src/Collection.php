@@ -63,7 +63,7 @@ class Collection {
 
 	/**
 	 * Optional capabilities for REST operations: read, create, edit, delete,
-	 * delete_multiple, batch, and remote_action. Unspecified operations keep
+	 * delete_multiple, bulk_edit, batch, and remote_action. Unspecified operations keep
 	 * the collection capability or the standard WordPress post capabilities.
 	 *
 	 * @var array
