@@ -385,6 +385,7 @@ class Record {
 	/**
 	 * Set a collection of props in one go, collect any errors, and return the result.
 	 * Only sets known props, ignoring unknown ones.
+	 * Applies removals last so they win over replacements and additions.
 	 *
 	 * @since  1.0.0
 	 *
@@ -394,12 +395,21 @@ class Record {
 	 * @return bool
 	 */
 	public function set_props( $props, $skip_null = false ) {
+		$removals = array();
 
 		foreach ( $props as $prop => $value ) {
 			// Checks if the prop being set is allowed.
 			if ( ! in_array( $prop, array( 'prop', 'date_prop' ), true ) && ! ( $skip_null && null === $value ) ) {
-				$this->set( $prop, $value );
+				if ( is_string( $prop ) && '::remove' === substr( $prop, -8 ) ) {
+					$removals[ $prop ] = $value;
+				} else {
+					$this->set( $prop, $value );
+				}
 			}
+		}
+
+		foreach ( $removals as $prop => $value ) {
+			$this->set( $prop, $value );
 		}
 
 		return true;
